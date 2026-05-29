@@ -1,0 +1,433 @@
+{
+  "info": {
+    "name": "Migration Tool Backend API",
+    "description": "Complete API collection for the Migration Tool Backend.\n\nSupported migration pairs:\n- Angular → React\n- Vue → React\n- JavaScript → TypeScript\n- React → TypeScript\n- React → Next.js\n\nSet the `baseUrl` variable to your server address (default: http://localhost:4000).\nSet the `apiKey` variable if API_KEY authentication is enabled.",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000", "type": "string" },
+    { "key": "apiKey", "value": "your-api-key-here", "type": "string" },
+    { "key": "jobId", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "x-api-key", "type": "string" },
+      { "key": "value", "value": "{{apiKey}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Server Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "Check if the backend server is running. Returns the server status and available routes."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"ok\",\n  \"message\": \"Migration tool backend is running.\",\n  \"routes\": [\"/api/parse\", \"/api/migrate\", \"/api/report\", \"/api/download\"]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Parse",
+      "item": [
+        {
+          "name": "Parse Project (JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/App.tsx\",\n      \"content\": \"import React from 'react';\\nconst App = () => <div>Hello</div>;\\nexport default App;\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/parse",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parse"]
+            },
+            "description": "Parse project files sent as JSON. Detects the framework (Angular, Vue, React, TypeScript, JavaScript) from the file contents."
+          },
+          "response": [
+            {
+              "name": "Success - React Detected",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"framework\": \"react\",\n    \"files\": [],\n    \"metadata\": {}\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Parse Project (ZIP Upload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "project",
+                  "type": "file",
+                  "src": "",
+                  "description": "Upload a .zip file containing the project source code"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/parse",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parse"]
+            },
+            "description": "Parse a project by uploading a ZIP file. The backend extracts the ZIP and detects the framework automatically."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Migrate",
+      "item": [
+        {
+          "name": "Migrate: Angular → React",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.jobId) {",
+                  "    pm.collectionVariables.set('jobId', jsonData.jobId);",
+                  "    console.log('Saved jobId: ' + jsonData.jobId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/app.component.ts\",\n      \"content\": \"import { Component } from '@angular/core';\\n\\n@Component({\\n  selector: 'app-root',\\n  template: '<div><h1>{{ title }}</h1><p>Welcome to Angular</p></div>'\\n})\\nexport class AppComponent {\\n  title = 'My Angular App';\\n}\"\n    }\n  ],\n  \"targetFramework\": \"react\",\n  \"sourceFramework\": \"angular\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate"]
+            },
+            "description": "Migrate an Angular project to React. Converts Angular class components with decorators to React functional components."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Accepted",
+              "code": 202,
+              "body": "{\n  \"success\": true,\n  \"jobId\": \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\",\n  \"status\": \"pending\",\n  \"sourceFramework\": \"angular\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Migrate: Vue → React",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.jobId) {",
+                  "    pm.collectionVariables.set('jobId', jsonData.jobId);",
+                  "    console.log('Saved jobId: ' + jsonData.jobId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/App.vue\",\n      \"content\": \"<template>\\n  <div>\\n    <h1>{{ title }}</h1>\\n    <p v-if=\\\"showMessage\\\">Welcome to Vue</p>\\n    <ul>\\n      <li v-for=\\\"item in items\\\" :key=\\\"item\\\">{{ item }}</li>\\n    </ul>\\n  </div>\\n</template>\\n\\n<script>\\nexport default {\\n  data() {\\n    return {\\n      title: 'My Vue App',\\n      showMessage: true,\\n      items: ['Item 1', 'Item 2', 'Item 3']\\n    };\\n  }\\n};\\n</script>\"\n    }\n  ],\n  \"targetFramework\": \"react\",\n  \"sourceFramework\": \"vue\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate"]
+            },
+            "description": "Migrate a Vue Single File Component (SFC) project to React JSX."
+          },
+          "response": []
+        },
+        {
+          "name": "Migrate: JavaScript → TypeScript",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.jobId) {",
+                  "    pm.collectionVariables.set('jobId', jsonData.jobId);",
+                  "    console.log('Saved jobId: ' + jsonData.jobId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/utils.js\",\n      \"content\": \"const greeting = 'Hello World';\\nconst add = (a, b) => a + b;\\nconst user = { name: 'John', age: 30 };\\n\\nfunction multiply(x, y) {\\n  return x * y;\\n}\\n\\nexport { greeting, add, user, multiply };\"\n    }\n  ],\n  \"targetFramework\": \"typescript\",\n  \"sourceFramework\": \"javascript\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate"]
+            },
+            "description": "Migrate plain JavaScript files to TypeScript. Adds type annotations and renames .js files to .ts."
+          },
+          "response": []
+        },
+        {
+          "name": "Migrate: React → TypeScript",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.jobId) {",
+                  "    pm.collectionVariables.set('jobId', jsonData.jobId);",
+                  "    console.log('Saved jobId: ' + jsonData.jobId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/App.jsx\",\n      \"content\": \"import React from 'react';\\n\\nconst App = (props) => {\\n  return (\\n    <div>\\n      <h1>{props.title}</h1>\\n      <p>Welcome to React</p>\\n    </div>\\n  );\\n};\\n\\nexport default App;\"\n    }\n  ],\n  \"targetFramework\": \"typescript\",\n  \"sourceFramework\": \"react\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate"]
+            },
+            "description": "Migrate React JSX components to TypeScript TSX. Adds type annotations to components and renames .jsx to .tsx."
+          },
+          "response": []
+        },
+        {
+          "name": "Migrate: React → Next.js",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.jobId) {",
+                  "    pm.collectionVariables.set('jobId', jsonData.jobId);",
+                  "    console.log('Saved jobId: ' + jsonData.jobId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/App.jsx\",\n      \"content\": \"import React from 'react';\\n\\nexport default function App() {\\n  return (\\n    <div>\\n      <h1>My React App</h1>\\n      <p>Welcome to React</p>\\n    </div>\\n  );\\n}\"\n    }\n  ],\n  \"targetFramework\": \"next\",\n  \"sourceFramework\": \"react\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate"]
+            },
+            "description": "Migrate a React application to Next.js structure."
+          },
+          "response": []
+        },
+        {
+          "name": "Migrate: Auto-Detect Source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.jobId) {",
+                  "    pm.collectionVariables.set('jobId', jsonData.jobId);",
+                  "    console.log('Saved jobId: ' + jsonData.jobId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectFiles\": [\n    {\n      \"path\": \"src/app.component.ts\",\n      \"content\": \"import { Component } from '@angular/core';\\n\\n@Component({\\n  selector: 'app-root',\\n  template: '<div>Hello Angular</div>'\\n})\\nexport class AppComponent {}\"\n    }\n  ],\n  \"targetFramework\": \"react\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate"]
+            },
+            "description": "Migrate without specifying sourceFramework. The backend auto-detects the source framework from the uploaded file contents."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Migration Job Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/migrate/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "migrate", "{{jobId}}"]
+            },
+            "description": "Poll the status of a migration job. Returns pending, completed, or failed status along with the migration result when complete."
+          },
+          "response": [
+            {
+              "name": "Success - Completed",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"job\": {\n    \"id\": \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\",\n    \"status\": \"completed\",\n    \"result\": {\n      \"success\": true,\n      \"targetFramework\": \"react\",\n      \"migratedFiles\": [],\n      \"metadata\": { \"fileCount\": 1, \"origin\": \"angular\" }\n    },\n    \"message\": null\n  }\n}"
+            },
+            {
+              "name": "Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Job not found.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Report",
+      "item": [
+        {
+          "name": "Generate Migration Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{jobId}}\",\n  \"summary\": \"Migration completed successfully.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/report",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "report"]
+            },
+            "description": "Generate or fetch a migration report for a completed job. Provide the jobId and an optional summary text."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"report\": {\n    \"jobId\": \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\",\n    \"summary\": \"Migration completed successfully.\",\n    \"timestamp\": \"2026-05-29T00:00:00.000Z\",\n    \"metrics\": {\n      \"migratedFiles\": 1,\n      \"warnings\": [],\n      \"errors\": []\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Download",
+      "item": [
+        {
+          "name": "Download Migrated Files (ZIP)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{apiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/download?jobId={{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "download"],
+              "query": [
+                { "key": "jobId", "value": "{{jobId}}", "description": "The migration job ID returned by POST /api/migrate" }
+              ]
+            },
+            "description": "Download the migrated project files as a ZIP archive. Requires a valid jobId from a completed migration job."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
