@@ -1,104 +1,113 @@
 import { ParsedFile } from "../types/parser.types";
-import { validateProject } from "./sandbox.service";
+import { DiagnosticEngine } from "../diagnostics/diagnostic-engine";
+import { callOpenAI } from "../lib/openai";
 import * as path from "path";
+import * as fs from "fs";
 
 /**
- * Iteratively runs validation and applies automated compiler repairs for common errors
- * such as broken imports and missing dependencies in package.json.
+ * Iteratively runs validation and applies automated AI repairs for compiler errors,
+ * package mismatch issues, JSX warnings, and framework violations.
  */
 export async function autoRepairProject(files: ParsedFile[]): Promise<{ files: ParsedFile[]; fixedIssues: string[] }> {
   const fixedIssues: string[] = [];
-  let currentFiles = files.map(f => ({ ...f }));
+  let currentFiles = files.map((f) => ({ ...f }));
 
-  let validation = await validateProject(currentFiles);
-  if (validation.success) {
-    return { files: currentFiles, fixedIssues };
-  }
-
-  let attempts = 0;
   const maxAttempts = 3;
+  let attempts = 0;
+  let hasErrors = true;
 
-  while (!validation.success && attempts < maxAttempts) {
+  while (hasErrors && attempts < maxAttempts) {
     attempts++;
-    let resolvedAny = false;
 
-    // 1. Repair unresolved relative import paths
-    for (const err of validation.errors) {
-      if (err.includes("Unresolved import:")) {
-        const match = err.match(/Unresolved import:\s*"([^"]+)"\s*in\s*([\s\S]+)$/i);
-        if (match) {
-          const importSpecifier = match[1];
-          const filePath = match[2].trim();
+    // Create a unique temporary directory for this sandbox compilation pass
+    const scratchDir = path.join(__dirname, "..", "..", "scratch", `repair-sandbox-${Date.now()}`);
 
-          const basename = importSpecifier.split("/").pop() || "";
-          const targetFile = currentFiles.find(f => 
-            f.path.toLowerCase().endsWith(`/${basename.toLowerCase()}.tsx`) ||
-            f.path.toLowerCase().endsWith(`/${basename.toLowerCase()}.ts`) ||
-            f.path.toLowerCase().endsWith(`/${basename.toLowerCase()}.jsx`) ||
-            f.path.toLowerCase().endsWith(`/${basename.toLowerCase()}.js`)
-          );
+    try {
+      // 1. Sandbox: Write current state files to temp disk
+      if (!fs.existsSync(scratchDir)) {
+        fs.mkdirSync(scratchDir, { recursive: true });
+      }
+      currentFiles.forEach((f) => {
+        const fullPath = path.join(scratchDir, f.path);
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(fullPath, f.content, "utf8");
+      });
 
-          if (targetFile) {
-            const sourceFile = currentFiles.find(f => f.path === filePath);
-            if (sourceFile) {
-              const sourceDir = filePath.substring(0, filePath.lastIndexOf("/")) || "";
-              const targetPath = targetFile.path.replace(/\.[^/.]+$/, "");
-              
-              let relativePath = path.relative(sourceDir, targetPath).replace(/\\/g, "/");
-              if (!relativePath.startsWith(".")) {
-                relativePath = `./${relativePath}`;
-              }
+      // 2. Diagnostics: Run static checks and compiler analysis
+      const diagnostics = DiagnosticEngine.analyze(scratchDir);
+      const errors = diagnostics.filter((d) => d.severity === "error");
 
-              const initialContent = sourceFile.content;
-              sourceFile.content = sourceFile.content.replace(
-                new RegExp(`import\\s+([\\s\\S]*?)\\s+from\\s+['"]${importSpecifier}['"]`, 'g'),
-                `import $1 from "${relativePath}"`
-              );
+      if (errors.length === 0) {
+        hasErrors = false;
+        break; // BUILD SUCCESS!
+      }
 
-              if (sourceFile.content !== initialContent) {
-                fixedIssues.push(`Repaired broken import path "${importSpecifier}" to "${relativePath}" in ${filePath}`);
-                resolvedAny = true;
-              }
-            }
+      // Group diagnostics by relative file path to allow focused AI fixes
+      const fileErrorsMap = new Map<string, typeof errors>();
+      errors.forEach((err) => {
+        if (err.location) {
+          const absolutePath = err.location.sourceFile;
+          const relativePath = path.relative(scratchDir, absolutePath).replace(/\\/g, "/");
+          const existingFile = currentFiles.find((f) => f.path === relativePath);
+          if (existingFile) {
+            const list = fileErrorsMap.get(relativePath) || [];
+            list.push(err);
+            fileErrorsMap.set(relativePath, list);
           }
+        }
+      });
+
+      if (fileErrorsMap.size === 0 && errors.length > 0) {
+        // Global compilation issue that couldn't be bound to local files, break loop
+        break;
+      }
+
+      // 3. AI: Query patches for each file containing errors
+      for (const [relPath, fileErrors] of fileErrorsMap.entries()) {
+        const fileNode = currentFiles.find((f) => f.path === relPath);
+        if (!fileNode) continue;
+
+        const formattedDiags = fileErrors
+          .map(
+            (d) =>
+              `- Line ${d.location?.line || "Global"}:${d.location?.character || ""}: [${
+                d.category
+              }] Code ${d.code} - ${d.message} (Suggested Fix: ${d.suggestedRepair || "None"})`
+          )
+          .join("\n");
+
+        const systemPrompt = `You are a Senior Compiler Developer. You fix TypeScript, React, Vue, Angular, and JSX compilation errors. Your task is to inspect the source code, review the compiler diagnostic errors, and generate the corrected file. You MUST output ONLY the corrected source code. Do not wrap the code in markdown formatting (like \`\`\`typescript), and do not include conversational text or explanation.`;
+
+        const userPrompt = `File Path: ${relPath}\n\nCompiler Diagnostics:\n${formattedDiags}\n\nOriginal Source Code:\n${fileNode.content}`;
+
+        const repairedCode = await callOpenAI(userPrompt, systemPrompt);
+
+        if (repairedCode && repairedCode.trim()) {
+          // Strip LLM markdown tags if present
+          let cleanCode = repairedCode.trim();
+          cleanCode = cleanCode.replace(/^```[a-zA-Z]*\n/, "");
+          cleanCode = cleanCode.replace(/\n```$/, "");
+
+          fileNode.content = cleanCode;
+          fixedIssues.push(`Healed compiler errors in "${relPath}" using AI self-healing patching.`);
         }
       }
-    }
-
-    // 2. Add missing packages to package.json
-    const packageJson = currentFiles.find(f => f.path === "package.json");
-    if (packageJson) {
+    } catch (error: any) {
+      fixedIssues.push(`Auto-repair validation exception: ${error.message}`);
+      break;
+    } finally {
+      // Sandbox Cleanup
       try {
-        const pkgData = JSON.parse(packageJson.content);
-        pkgData.dependencies = pkgData.dependencies || {};
-
-        for (const err of validation.errors) {
-          const depMatch = err.match(/Cannot find module ['"]([^'"]+)['"]/i) || 
-                           err.match(/Unresolved import:\s*"([^.\/][^"]+)"/i);
-          if (depMatch) {
-            const depName = depMatch[1];
-            if (!pkgData.dependencies[depName] && !["react", "react-dom", "next"].includes(depName)) {
-              pkgData.dependencies[depName] = "latest";
-              fixedIssues.push(`Added missing dependency "${depName}" to package.json`);
-              resolvedAny = true;
-            }
-          }
-        }
-
-        if (resolvedAny) {
-          packageJson.content = JSON.stringify(pkgData, null, 2);
+        if (fs.existsSync(scratchDir)) {
+          fs.rmSync(scratchDir, { recursive: true, force: true });
         }
       } catch (e) {
-        // Ignored
+        // Ignore cleanup issues
       }
     }
-
-    if (!resolvedAny) {
-      break;
-    }
-
-    // Re-validate after fixes applied
-    validation = await validateProject(currentFiles);
   }
 
   return { files: currentFiles, fixedIssues };

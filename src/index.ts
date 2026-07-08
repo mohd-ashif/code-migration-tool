@@ -7,6 +7,7 @@ import migrateRoutes from "./routes/migrate.routes";
 import reportRoutes from "./routes/report.routes";
 import downloadRoutes from "./routes/download.routes";
 import jobsRoutes from "./routes/jobs.routes";
+import graphRoutes from "./routes/graph.routes";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
 import { errorHandler } from "./middleware/error.middleware";
@@ -30,7 +31,7 @@ app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     message: "Migration tool backend is running.",
-    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs"],
+    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs", "/api/graph"],
   });
 });
 
@@ -39,6 +40,7 @@ app.use("/api/migrate", migrateRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/download", downloadRoutes);
 app.use("/api/jobs", jobsRoutes);
+app.use("/api/graph", graphRoutes);
 
 app.get("/api/sample", (_req, res) => {
   const path = require("path");
