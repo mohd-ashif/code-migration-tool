@@ -9,6 +9,7 @@ interface JobRecord {
   status: "pending" | "completed" | "failed";
   result?: MigrationResult | null;
   message?: string | null;
+  request?: MigrationRequest | null;
 }
 
 const jobStore = new Map<string, JobRecord>();
@@ -24,7 +25,7 @@ export async function persistJobToDb(id: string, request: MigrationRequest) {
 
 export function enqueueMigrationJob(request: MigrationRequest): JobRecord {
   const id = request.jobId ?? uuidv4();
-  const job: JobRecord = { id, status: "pending", result: null, message: null };
+  const job: JobRecord = { id, status: "pending", result: null, message: null, request };
   jobStore.set(id, job);
 
   // persist to DB if configured
@@ -38,7 +39,8 @@ export function enqueueMigrationJob(request: MigrationRequest): JobRecord {
 }
 
 export async function markJobCompleted(jobId: string, result: MigrationResult) {
-  jobStore.set(jobId, { id: jobId, status: "completed", result, message: null });
+  const originalJob = jobStore.get(jobId);
+  jobStore.set(jobId, { id: jobId, status: "completed", result, message: null, request: originalJob?.request });
   if (!dbPool) return;
   try {
     await queryDatabase("UPDATE migration_jobs SET status = $1, result = $2, updated_at = NOW() WHERE id = $3", ["completed", result, jobId]);
@@ -48,7 +50,8 @@ export async function markJobCompleted(jobId: string, result: MigrationResult) {
 }
 
 export async function markJobFailed(jobId: string, message?: string) {
-  jobStore.set(jobId, { id: jobId, status: "failed", result: null, message: message ?? null });
+  const originalJob = jobStore.get(jobId);
+  jobStore.set(jobId, { id: jobId, status: "failed", result: null, message: message ?? null, request: originalJob?.request });
   if (!dbPool) return;
   try {
     await queryDatabase("UPDATE migration_jobs SET status = $1, message = $2, updated_at = NOW() WHERE id = $3", ["failed", message ?? null, jobId]);
@@ -61,10 +64,10 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
   // prefer DB if available
   if (dbPool) {
     try {
-      const rows = await queryDatabase("SELECT id, status, result, message FROM migration_jobs WHERE id = $1", [jobId]);
+      const rows = await queryDatabase("SELECT id, status, request, result, message FROM migration_jobs WHERE id = $1", [jobId]);
       if (rows && rows.length) {
         const r = rows[0] as any;
-        return { id: r.id, status: r.status, result: r.result ?? null, message: r.message ?? null };
+        return { id: r.id, status: r.status, request: r.request ?? null, result: r.result ?? null, message: r.message ?? null };
       }
     } catch (err) {
       logger.error(`Failed to read job ${jobId} from DB: ${err}`);
@@ -72,4 +75,23 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
   }
 
   return jobStore.get(jobId);
+}
+
+export async function listJobs(): Promise<JobRecord[]> {
+  if (dbPool) {
+    try {
+      const rows = await queryDatabase("SELECT id, status, result, message FROM migration_jobs ORDER BY created_at DESC LIMIT 50"); // Use created_at if updated_at doesn't exist, let's just use updated_at since it is in markJobCompleted
+      if (rows) {
+        return rows.map((r: any) => ({
+          id: r.id,
+          status: r.status,
+          result: r.result ?? null,
+          message: r.message ?? null
+        }));
+      }
+    } catch (err) {
+      logger.error(`Failed to list jobs from DB: ${err}`);
+    }
+  }
+  return Array.from(jobStore.values());
 }

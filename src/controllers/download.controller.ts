@@ -14,7 +14,8 @@ export async function handleDownload(req: Request, res: Response, next: NextFunc
       return res.status(404).json({ success: false, message: "Job result not found." });
     }
 
-    const archiveBuffer = await createArchive(jobResult.result.migratedFiles || []);
+    const files = (jobResult.result.migratedFiles || []).filter(f => f.path !== ".migration_metadata.json");
+    const archiveBuffer = await createArchive(files);
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename=migration-${jobId}.zip`);
     res.send(archiveBuffer);

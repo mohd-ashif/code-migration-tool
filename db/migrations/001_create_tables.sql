@@ -9,11 +9,6 @@ CREATE TABLE IF NOT EXISTS migration_jobs (
   result JSONB,
   message TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-
-
-  .0
-  0
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

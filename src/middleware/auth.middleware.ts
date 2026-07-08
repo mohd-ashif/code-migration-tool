@@ -9,7 +9,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     return next();
   }
 
-  const requestKey = req.header("x-api-key");
+  const requestKey = req.header("x-api-key") || req.query.apiKey;
   if (requestKey !== apiKey) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
   }
