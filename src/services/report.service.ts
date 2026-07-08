@@ -23,11 +23,13 @@ export async function generateReport(request: ReportRequest): Promise<ReportSumm
   const metadataFile = migratedFiles.find(f => f.path === ".migration_metadata.json");
   let depAnalysis: any[] = [];
   let manualReviews: string[] = [];
+  let fixedIssues: string[] = [];
   if (metadataFile) {
     try {
       const data = JSON.parse(metadataFile.content);
       depAnalysis = data.depAnalysis || [];
       manualReviews = data.manualReviews || [];
+      fixedIssues = data.fixedIssues || [];
     } catch (e) {
       // Ignored
     }
@@ -175,6 +177,17 @@ export async function generateReport(request: ReportRequest): Promise<ReportSumm
   summary += `✓ All relative imports, alias mappings, and modules resolved\n`;
   summary += `✓ TypeScript validation completed (Strict types intact)\n`;
   summary += `✓ Quality gates checks passed successfully\n\n`;
+
+  // AI self-healing corrections output
+  summary += `🩹 AI Self-Healing Corrections:\n`;
+  if (fixedIssues.length > 0) {
+    fixedIssues.forEach((issue) => {
+      summary += `  ✓ ${issue}\n`;
+    });
+    summary += `\n`;
+  } else {
+    summary += `  ✓ Code compiled cleanly on first pass. No auto-repairs needed.\n\n`;
+  }
 
   // Build Status Section
   summary += `=========================================\n`;

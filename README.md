@@ -1,83 +1,95 @@
-# Code Migration Tool - Backend API
+# 🛠️ Code Migration Tool - Backend Service
 
-This is the backend service for the **Code Migration Tool**, built with Node.js, Express, and TypeScript. It provides a set of RESTful APIs to parse, transform, and migrate frontend codebases from one framework or language to another using AST (Abstract Syntax Tree) transformations and AI-assisted codemods.
-
-## Features
-
-- **Framework Auto-Detection**: Upload a `.zip` or send JSON, and the backend automatically detects whether it's Angular, Vue, React, or vanilla JS.
-- **Background Processing**: Migration jobs are placed in a queue and processed by background workers.
-- **AST Codemods**: Reliable structural code transformations using custom-built codemod services.
-- **PostgreSQL Persistence**: Jobs and results are persisted in a database to ensure they are available for downloading later.
-- **Report Generation**: Automatically generates a migration report with metadata about the transformation.
-
-## Supported Migrations
-
-Currently, the backend supports the following migration paths:
-- **Angular** → **React**
-- **Vue** → **React**
-- **JavaScript** → **TypeScript**
-- **React** → **TypeScript**
-- **React** → **Next.js**
+This is the backend microservice for the **Code Migration Tool**, built with Node.js, Express, and TypeScript. It exposes a set of RESTful APIs to parse, analyze, transform, and compile frontend codebases using AST (Abstract Syntax Tree) transformation engines and AI-assisted codemods.
 
 ---
 
-## Getting Started
+## 🚀 Key Features
 
-### Prerequisites
-- Node.js (v18+)
-- PostgreSQL (Optional, but recommended for persisting background jobs)
-- Redis (Optional, for advanced queuing)
+*   **Framework Auto-Detection**: Analyzes project files (either uploaded as a `.zip` or sent in a JSON payload) and automatically classifies source frameworks (Angular, Vue, React, Svelte, or Vanilla JavaScript).
+*   **Semantic Graph Analyzer**: Resolves files recursively to compile dependency architectures, detecting circular references and dead components.
+*   **Unified Migration IR**: Compiles AST definitions into a framework-agnostic pivot model (Props, States, Methods, Lifecycles, and Template nodes).
+*   **AST Patch Engine**: Compiles minimal structural diffs and mutates the AST in reverse sequence, keeping formatting and comments completely intact without regex.
+*   **AI Self-Healing Pipeline**: Orchestrates validation sandboxes, diagnostic checks, and OpenAI completions to patch compiler errors on the fly.
+*   **Job Validation Sandbox**: Validates migrated project outputs inside a scratch workspace directory via TypeScript transpilation and file-import matching before completion.
+*   **AST Codemods**: Utilizes robust compiler-level transformations (such as parsing classes, decorator properties, hooks, and lifecycle states) for structure-accurate translation.
+*   **Multi-Queue Processing**: Handles long-running compilation workflows asynchronously in a worker pool.
+*   **Database Persistence**: Supports relational logging and job state persistence for tracking download history.
+
+---
+
+## 🔄 Supported Migration Matrices
+
+The compiler handles the following transition paths:
+
+| Source Framework | React (JSX) | TypeScript (TSX) | Next.js | Vue 3 | Nuxt.js |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Angular** |  |  | ❌ | ❌ | ❌ |
+| **Vue** |  |  |  | ❌ | ❌ |
+| **React** | ❌ (Same) |  |  |  |  |
+| **JavaScript** | ❌ |  | ❌ | ❌ | ❌ |
+| **TypeScript** |  | ❌ (Same) |  |  | ❌ |
+| **Next.js** |  |  | ❌ (Same) |  |  |
+| **Svelte** |  |  |  | ❌ | ❌ |
+| **Nuxt.js** |  | ❌ |  | ❌ | ❌ (Same) |
+
+> [!NOTE]
+> Unsupported migration pairs (e.g. migrating *to* Svelte) are validated gracefully at the API controller layer, returning clear, informative suggestions rather than generic parsing failures.
+
+---
+
+## ⚙️ Environment Configuration
+
+Copy the example variables file to begin:
+```bash
+cp .env.example .env
+```
+
+| Variable | Description | Default / Fallback Mode |
+| :--- | :--- | :--- |
+| `PORT` | Local port the express server listens on. | `4000` |
+| `API_KEY` | API request authentication token. | Disabled (Allows all requests if left empty) |
+| `DATABASE_URL` / `SUPABASE_URL` | PostgreSQL connection string for persisting jobs. | Disabled (Runs with in-memory `Map` stores) |
+| `REDIS_URL` | Redis instance connection string for caching & queues. | Disabled (Queues run locally in-memory via `EventEmitter`) |
+| `OPENAI_API_KEY` | API Key for LLM-assisted repair features. | Stub Mode (Runs mock AI responses) |
+
+---
+
+## 🛠️ Architecture Overview
+
+The backend directory layout is organized by layer:
+
+*   [`/src/controllers`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/controllers): Handles incoming request validation and delegates job queuing.
+*   [`/src/validators`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/validators): Validates payload JSON structure and framework input types.
+*   [`/src/analyzer`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/analyzer): Compiles project-wide semantic graphs and tracks cross-file bindings.
+*   [`/src/ir`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/ir): Implements the Unified Migration Intermediate Representation.
+*   [`/src/diagnostics`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/diagnostics): Contains compiler diagnostics checks, JSX key warnings, and reporters.
+*   [`/src/patch`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/patch): Implements the AST Patch Engine.
+*   [`/src/services`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/services): Contains key business logic:
+    *   [`codemod.service.ts`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/services/codemod.service.ts) - Orchestrates transformations.
+    *   [`sandbox.service.ts`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/services/sandbox.service.ts) - Handles compilation verification.
+    *   [`auto-repair.service.ts`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/services/auto-repair.service.ts) - Orchestrates the self-healing loop.
+    *   [`graph-analyzer.ts`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/services/graph-analyzer.ts) - Computes circular dependencies and dead code.
+*   [`/src/codemods`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/codemods): Core compiler codes split by framework (React to Next, Angular to React, Vue to JSX).
+*   [`/src/queues`](file:///d:/ashif/Resume%20Projects/migration-tool/packages/backend/src/queues): Local background execution tasks and workers.
+
+---
+
+## 📦 Getting Started
 
 ### Installation
+From the package root or the monorepo root:
+```bash
+npm install
+```
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+### Dev Server
+```bash
+npm run dev
+```
+The server will boot on `http://localhost:4000`.
 
-2. Copy the example environment file and configure your variables:
-   ```bash
-   cp .env.example .env
-   ```
-   *Make sure to set your `DATABASE_URL` if you want to use PostgreSQL.*
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-   The server will start on `http://localhost:4000` (or whatever `PORT` you configured).
-
----
-
-## API Endpoints
-
-A Postman collection is included in the root of this directory (`postman_collection.json`) which you can import to test all endpoints.
-
-### 1. `POST /api/parse`
-Upload a `.zip` file of a project or send a JSON payload to parse the project and auto-detect the source framework.
-
-### 2. `POST /api/migrate`
-Initiates a new migration job. Returns a `jobId` immediately while the background worker processes the files.
-- **Body**: `{ "projectFiles": [...], "targetFramework": "react" }`
-- **Note**: The source framework is auto-detected if not provided.
-
-### 3. `GET /api/migrate/:jobId`
-Poll the status of a migration job. Returns `pending`, `completed`, or `failed`.
-
-### 4. `GET /api/download?jobId=:jobId`
-Download the successfully migrated files as a `.zip` archive.
-
-### 5. `POST /api/report`
-Generates a structured report detailing the files transformed and any warnings/errors encountered during the codemod process.
-
----
-
-## Architecture Overview
-
-- **Controllers**: Handle HTTP requests and input validation (`src/controllers`).
-- **Services**: Business logic, including `codemod.service.ts` for handling the actual AST transformations and `job.service.ts` for database persistence.
-- **Codemods**: The actual transformation logic is split by framework inside `src/codemods/`.
-- **Workers**: Background workers that listen to the `migration.queue` and execute heavy transformation tasks without blocking the main event loop (`src/queues/workers`).
-
-## License
-MIT
+### Type-Checking & Builds
+```bash
+npm run build
+```

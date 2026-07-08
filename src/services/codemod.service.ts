@@ -126,5 +126,19 @@ export async function runCodemod(
   const repairResult = await autoRepairProject(migrated);
   migrated = repairResult.files;
 
+  // Store auto-repair corrections in metadata so report service can display them
+  let metadataFile = migrated.find(f => f.path === ".migration_metadata.json");
+  if (!metadataFile) {
+    metadataFile = { path: ".migration_metadata.json", content: "{}" };
+    migrated.push(metadataFile);
+  }
+  try {
+    const data = JSON.parse(metadataFile.content);
+    data.fixedIssues = repairResult.fixedIssues || [];
+    metadataFile.content = JSON.stringify(data, null, 2);
+  } catch (e) {
+    // Ignore JSON serialize errors
+  }
+
   return migrated;
 }
