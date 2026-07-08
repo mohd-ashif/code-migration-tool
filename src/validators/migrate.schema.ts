@@ -1,8 +1,8 @@
 import { ParsedFile } from "../types/parser.types";
 import { SourceFramework, TargetFramework } from "../types/migration.types";
 
-const targetFrameworks: TargetFramework[] = ["react", "next", "typescript", "vue"];
-const sourceFrameworks: SourceFramework[] = ["angular", "vue", "react", "javascript", "typescript"];
+const targetFrameworks: TargetFramework[] = ["react", "next", "typescript", "vue", "svelte", "nuxt"];
+const sourceFrameworks: SourceFramework[] = ["angular", "vue", "react", "javascript", "typescript", "next", "svelte", "nuxt"];
 
 export function validateMigrationRequest(body: any): body is {
   projectFiles: ParsedFile[];

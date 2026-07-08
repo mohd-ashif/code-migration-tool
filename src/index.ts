@@ -6,6 +6,7 @@ import parseRoutes from "./routes/parse.routes";
 import migrateRoutes from "./routes/migrate.routes";
 import reportRoutes from "./routes/report.routes";
 import downloadRoutes from "./routes/download.routes";
+import jobsRoutes from "./routes/jobs.routes";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
 import { errorHandler } from "./middleware/error.middleware";
@@ -29,7 +30,7 @@ app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     message: "Migration tool backend is running.",
-    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download"],
+    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs"],
   });
 });
 
@@ -37,6 +38,18 @@ app.use("/api/parse", parseRoutes);
 app.use("/api/migrate", migrateRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/download", downloadRoutes);
+app.use("/api/jobs", jobsRoutes);
+
+app.get("/api/sample", (_req, res) => {
+  const path = require("path");
+  const fs = require("fs");
+  const filePath = path.join(__dirname, "..", "sample-project.zip");
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, "sample-project.zip");
+  } else {
+    res.status(404).json({ success: false, message: "Sample project file not found." });
+  }
+});
 
 app.use(errorHandler);
 

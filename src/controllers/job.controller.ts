@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { getJobResult } from "../services/job.service";
+import { getJobResult, listJobs } from "../services/job.service";
 
 export async function handleJobStatus(req: Request, res: Response, next: NextFunction) {
   try {
@@ -9,6 +9,15 @@ export async function handleJobStatus(req: Request, res: Response, next: NextFun
       return res.status(404).json({ success: false, message: "Job not found." });
     }
     res.json({ success: true, job });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleListJobs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const jobs = await listJobs();
+    res.json({ success: true, jobs });
   } catch (error) {
     next(error);
   }
