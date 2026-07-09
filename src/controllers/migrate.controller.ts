@@ -4,7 +4,7 @@ import { detectFramework } from "../utils/detectFramework";
 import { isSupportedMigrationPair, supportedMigrationPairs } from "../services/codemod.service";
 import { SourceFramework, TargetFramework } from "../types/migration.types";
 
-const targetFrameworks: TargetFramework[] = ["react", "next", "typescript", "vue", "svelte", "nuxt"];
+const targetFrameworks: TargetFramework[] = ["react", "next", "typescript", "vue", "svelte", "nuxt", "solid", "qwik"];
 
 const frameworkLabels: Record<string, string> = {
   angular: "Angular",
@@ -15,6 +15,8 @@ const frameworkLabels: Record<string, string> = {
   next: "Next.js",
   svelte: "Svelte",
   nuxt: "Nuxt.js",
+  solid: "SolidJS",
+  qwik: "Qwik",
 };
 
 function getValidTargetsForSource(source: SourceFramework): TargetFramework[] {

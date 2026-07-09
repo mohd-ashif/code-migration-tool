@@ -1,7 +1,7 @@
 import { ParsedFile } from "./parser.types";
 
-export type TargetFramework = "react" | "next" | "typescript" | "vue" | "svelte" | "nuxt";
-export type SourceFramework = "angular" | "vue" | "react" | "javascript" | "typescript" | "next" | "svelte" | "nuxt";
+export type TargetFramework = "react" | "next" | "typescript" | "vue" | "svelte" | "nuxt" | "solid" | "qwik";
+export type SourceFramework = "angular" | "vue" | "react" | "javascript" | "typescript" | "next" | "svelte" | "nuxt" | "solid" | "qwik";
 
 export interface MigrationRequest {
   jobId?: string;

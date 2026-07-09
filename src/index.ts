@@ -12,6 +12,7 @@ import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
 import { errorHandler } from "./middleware/error.middleware";
 import { connectRedis } from "./lib/redis";
+import { initializeDatabase } from "./lib/database";
 import { config, validateEnv } from "./config";
 import { logger } from "./utils/logger";
 // Start background workers
@@ -60,6 +61,14 @@ validateEnv();
 const port = config.PORT;
 app.listen(port, async () => {
   logger.info(`Migration backend running on http://localhost:${port}`);
+
+  if (config.DATABASE_URL) {
+    try {
+      await initializeDatabase();
+    } catch (error) {
+      logger.error(`Database initialization failed: ${error}`);
+    }
+  }
 
   if (config.REDIS_URL) {
     try {
