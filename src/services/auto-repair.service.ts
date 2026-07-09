@@ -3,13 +3,24 @@ import { DiagnosticEngine } from "../diagnostics/diagnostic-engine";
 import { callOpenAI } from "../lib/openai";
 import * as path from "path";
 import * as fs from "fs";
+import { config } from "../config";
+import { logger } from "../utils/logger";
 
 /**
  * Iteratively runs validation and applies automated AI repairs for compiler errors,
  * package mismatch issues, JSX warnings, and framework violations.
  */
-export async function autoRepairProject(files: ParsedFile[]): Promise<{ files: ParsedFile[]; fixedIssues: string[] }> {
+export async function autoRepairProject(
+  files: ParsedFile[],
+  signal?: AbortSignal
+): Promise<{ files: ParsedFile[]; fixedIssues: string[] }> {
   const fixedIssues: string[] = [];
+  
+  if (!config.OPENAI_API_KEY) {
+    logger.info("OPENAI_API_KEY is not set. Skipping AI auto-repair phase.");
+    return { files, fixedIssues };
+  }
+
   let currentFiles = files.map((f) => ({ ...f }));
 
   const maxAttempts = 3;
@@ -17,6 +28,9 @@ export async function autoRepairProject(files: ParsedFile[]): Promise<{ files: P
   let hasErrors = true;
 
   while (hasErrors && attempts < maxAttempts) {
+    if (signal?.aborted) {
+      throw new Error("Job aborted");
+    }
     attempts++;
 
     // Create a unique temporary directory for this sandbox compilation pass

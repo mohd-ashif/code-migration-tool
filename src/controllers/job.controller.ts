@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { getJobResult, listJobs } from "../services/job.service";
+import { getJobResult, listJobs, cancelJob } from "../services/job.service";
 
 export async function handleJobStatus(req: Request, res: Response, next: NextFunction) {
   try {
@@ -18,6 +18,19 @@ export async function handleListJobs(req: Request, res: Response, next: NextFunc
   try {
     const jobs = await listJobs();
     res.json({ success: true, jobs });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleCancelJob(req: Request, res: Response, next: NextFunction) {
+  try {
+    const jobId = req.params.jobId as string;
+    const cancelled = await cancelJob(jobId);
+    if (!cancelled) {
+      return res.status(404).json({ success: false, message: "Job not found or already completed/cancelled." });
+    }
+    res.json({ success: true, message: "Job cancellation requested successfully." });
   } catch (error) {
     next(error);
   }

@@ -19,6 +19,16 @@ export async function queryDatabase<T extends QueryResultRow = any>(text: string
   return result.rows;
 }
 
+export async function initializeDatabase() {
+  if (!dbPool) return;
+  try {
+    await queryDatabase("ALTER TABLE migration_jobs ADD COLUMN IF NOT EXISTS progress INTEGER DEFAULT 0");
+    logger.info("Database schema initialized: checked 'progress' column in 'migration_jobs'.");
+  } catch (err) {
+    logger.error(`Failed to initialize database schema: ${err}`);
+  }
+}
+
 export async function closeDatabase() {
   if (dbPool) {
     await dbPool.end();

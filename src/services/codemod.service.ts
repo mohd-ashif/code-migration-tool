@@ -5,7 +5,11 @@ import { transformVueSFCToJSX } from "../codemods/vue/vue-sfc-to-jsx";
 import { transformJSToTS, transformTSToJS } from "../codemods/javascript/js-to-ts";
 import { transformReactToNext } from "../codemods/react/react-to-next";
 import { transformReactToVue } from "../codemods/react/react-to-vue";
+import { transformReactToSvelte, migrateReactProject } from "../codemods/react/react-to-svelte";
 import { migrateNextToReact } from "../codemods/next/next-to-react";
+import { migrateReactProjectToSolid } from "../codemods/react-to-solid";
+import { migrateReactProjectToQwik } from "../codemods/react-to-qwik";
+import { migrateAngularProjectToNext } from "../codemods/angular-to-next";
 
 // Phase 2 compilers
 import { migrateAngularToReact } from "../codemods/angular/angular-compiler";
@@ -40,6 +44,10 @@ export const supportedMigrationPairs: Array<{ source: SourceFramework; target: T
   { source: "svelte", target: "next" },
   { source: "nuxt", target: "next" },
   { source: "nuxt", target: "react" },
+  { source: "react", target: "svelte" },
+  { source: "react", target: "solid" },
+  { source: "react", target: "qwik" },
+  { source: "angular", target: "next" },
 ];
 
 export function isSupportedMigrationPair(source: SourceFramework, target: TargetFramework): boolean {
@@ -49,13 +57,30 @@ export function isSupportedMigrationPair(source: SourceFramework, target: Target
 export async function runCodemod(
   projectFiles: ParsedFile[],
   sourceFramework: SourceFramework,
-  targetFramework: TargetFramework
+  targetFramework: TargetFramework,
+  onProgress?: (progress: number) => void,
+  signal?: AbortSignal
 ): Promise<ParsedFile[]> {
+  const checkAbort = () => {
+    if (signal?.aborted) {
+      throw new Error("Job aborted");
+    }
+  };
+
+  checkAbort();
+  onProgress?.(5);
+
   let migrated: ParsedFile[] = [];
 
   // Project-wide conversions
   if (sourceFramework === "angular" && (targetFramework === "react" || targetFramework === "typescript")) {
     migrated = await migrateAngularToReact(projectFiles);
+  } else if (sourceFramework === "angular" && targetFramework === "next") {
+    migrated = migrateAngularProjectToNext(projectFiles);
+  } else if (sourceFramework === "react" && targetFramework === "solid") {
+    migrated = migrateReactProjectToSolid(projectFiles);
+  } else if (sourceFramework === "react" && targetFramework === "qwik") {
+    migrated = migrateReactProjectToQwik(projectFiles);
   } else if (sourceFramework === "nuxt" && targetFramework === "next") {
     migrated = await migrateNuxtToNext(projectFiles);
   } else if (sourceFramework === "next" && targetFramework === "react") {
@@ -66,6 +91,10 @@ export async function runCodemod(
     migrated = await migrateReactToNext(projectFiles);
   } else if (sourceFramework === "typescript" && targetFramework === "next") {
     migrated = await migrateReactToNext(projectFiles);
+  } else if (sourceFramework === "react" && targetFramework === "svelte") {
+    migrated = migrateReactProject(projectFiles);
+  } else if (sourceFramework === "typescript" && targetFramework === "svelte") {
+    migrated = migrateReactProject(projectFiles);
   } else {
     // File-by-file fallback mapping
     migrated = projectFiles.map((file) => {
@@ -104,6 +133,10 @@ export async function runCodemod(
         const result = transformReactToVue(content, path);
         content = result.content;
         path = result.path;
+      } else if (sourceFramework === "react" && targetFramework === "svelte") {
+        const result = transformReactToSvelte(content, path);
+        content = result.content;
+        path = result.path;
       } else if (sourceFramework === "typescript" && targetFramework === "vue") {
         const result = transformReactToVue(content, path);
         content = result.content;
@@ -118,13 +151,23 @@ export async function runCodemod(
     });
   }
 
+  checkAbort();
+  onProgress?.(40);
+
   // 4. Apply State & Styling Migration layers on top of output files
   migrated = migrateStateLibrary(migrated);
+  checkAbort();
+  onProgress?.(50);
+
   migrated = migrateStyles(migrated);
+  checkAbort();
+  onProgress?.(60);
 
   // 5. Execute Sandboxed Validation and Auto-Repair loop
-  const repairResult = await autoRepairProject(migrated);
+  const repairResult = await autoRepairProject(migrated, signal);
   migrated = repairResult.files;
+  checkAbort();
+  onProgress?.(95);
 
   // Store auto-repair corrections in metadata so report service can display them
   let metadataFile = migrated.find(f => f.path === ".migration_metadata.json");
@@ -139,6 +182,9 @@ export async function runCodemod(
   } catch (e) {
     // Ignore JSON serialize errors
   }
+
+  checkAbort();
+  onProgress?.(100);
 
   return migrated;
 }
