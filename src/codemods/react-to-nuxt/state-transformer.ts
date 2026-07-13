@@ -356,7 +356,7 @@ export function transformStateSetters(
           const parent = node.parent;
           
           let inDeps = false;
-          let curr = node;
+          let curr: ts.Node = node;
           while (curr.parent) {
             const parentNode = curr.parent;
             if (ts.isCallExpression(parentNode)) {
