@@ -42,6 +42,12 @@ export interface ReactProp {
   required?: boolean;
 }
 
+export interface ReactEmit {
+  name: string;
+  eventName: string;
+  type: string;
+}
+
 export interface ReactRef {
   name: string;
   defaultValue: string;
@@ -78,6 +84,7 @@ export interface AnalysisResult {
   methods: ReactMethod[];
   contexts: ReactContextUse[];
   props: ReactProp[];
+  emits: ReactEmit[];
   refs: ReactRef[];
   memos: ReactMemo[];
   callbacks: ReactCallback[];
@@ -88,6 +95,7 @@ export interface AnalysisResult {
   componentName: string;
   isComponent: boolean;
   extraStatements: string[];
+  externalStates: string[];
 }
 
 export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult {
@@ -98,6 +106,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     methods: [],
     contexts: [],
     props: [],
+    emits: [],
     refs: [],
     memos: [],
     callbacks: [],
@@ -106,6 +115,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     componentName: "App",
     isComponent: false,
     extraStatements: [],
+    externalStates: [],
   };
 
   // Walk top-level statements
@@ -136,7 +146,6 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     }
 
     // 2. Styled Components
-    // e.g. const Container = styled.div` color: red; ` or const Wrapper = styled(Box)` ... `
     if (ts.isVariableStatement(statement)) {
       statement.declarationList.declarations.forEach((decl) => {
         if (ts.isIdentifier(decl.name) && decl.initializer) {
@@ -147,14 +156,12 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
             let tag = "";
             let isStyled = false;
             
-            // Check styled.div
             if (ts.isPropertyAccessExpression(tagExpr)) {
               if (tagExpr.expression.getText(sourceFile) === "styled") {
                 tag = tagExpr.name.text;
                 isStyled = true;
               }
             } else if (ts.isCallExpression(tagExpr)) {
-              // Check styled(Box)
               if (tagExpr.expression.getText(sourceFile) === "styled") {
                 tag = tagExpr.arguments[0]?.getText(sourceFile) || "div";
                 isStyled = true;
@@ -170,29 +177,33 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
       });
     }
 
-    // 3. Functional components (function declaration)
+    // 3. Functional components & custom hooks (function declaration)
     if (ts.isFunctionDeclaration(statement) && statement.name) {
       const name = statement.name.text;
-      if (isReactComponentName(name)) {
+      if (isReactComponentName(name) || name.startsWith("use")) {
         result.componentName = name;
-        result.isComponent = true;
+        if (isReactComponentName(name)) {
+          result.isComponent = true;
+        }
         analyzeProps(statement, sourceFile, result);
         analyzeComponentBody(statement, sourceFile, result);
       }
     }
 
-    // 4. Functional components (arrow functions or function expressions)
+    // 4. Functional components & custom hooks (arrow functions or function expressions)
     if (ts.isVariableStatement(statement)) {
       statement.declarationList.declarations.forEach((decl) => {
         if (ts.isIdentifier(decl.name)) {
           const name = decl.name.text;
           if (
-            isReactComponentName(name) &&
+            (isReactComponentName(name) || name.startsWith("use")) &&
             decl.initializer &&
             (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
           ) {
             result.componentName = name;
-            result.isComponent = true;
+            if (isReactComponentName(name)) {
+              result.isComponent = true;
+            }
             analyzeProps(decl.initializer, sourceFile, result);
             analyzeComponentBody(decl.initializer, sourceFile, result);
           }
@@ -223,7 +234,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     let isMainComponent = false;
     let isStyledComponent = false;
 
-    if (ts.isFunctionDeclaration(statement) && statement.name && isReactComponentName(statement.name.text)) {
+    if (ts.isFunctionDeclaration(statement) && statement.name && (isReactComponentName(statement.name.text) || statement.name.text.startsWith("use"))) {
       isMainComponent = true;
     } else if (ts.isClassDeclaration(statement) && statement.name && isReactComponentName(statement.name.text)) {
       isMainComponent = true;
@@ -231,7 +242,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
       statement.declarationList.declarations.forEach((decl) => {
         if (ts.isIdentifier(decl.name)) {
           const name = decl.name.text;
-          if (isReactComponentName(name) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+          if ((isReactComponentName(name) || name.startsWith("use")) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
             isMainComponent = true;
           }
           if (decl.initializer && ts.isTaggedTemplateExpression(decl.initializer)) {
@@ -254,11 +265,51 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     }
   });
 
+  // AST crawler fallback to ensure useState is always captured in custom hooks
+  if (result.states.length === 0) {
+    const scanNode = (node: ts.Node) => {
+      if (ts.isCallExpression(node)) {
+        const calleeText = node.expression.getText(sourceFile);
+        if (calleeText === "useState" || calleeText.endsWith(".useState")) {
+          const parent = node.parent;
+          if (parent && ts.isVariableDeclaration(parent) && ts.isArrayBindingPattern(parent.name)) {
+            const elements = parent.name.elements;
+            if (elements.length >= 1) {
+              const stateVar = elements[0];
+              const setterVar = elements[1];
+              if (ts.isBindingElement(stateVar) && ts.isIdentifier(stateVar.name)) {
+                const name = stateVar.name.text;
+                const setter =
+                  setterVar && ts.isBindingElement(setterVar) && ts.isIdentifier(setterVar.name)
+                    ? setterVar.name.text
+                    : `set${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+                const defaultValue =
+                  node.arguments.length > 0 ? node.arguments[0].getText(sourceFile) : "undefined";
+                let type = "any";
+                if (node.typeArguments && node.typeArguments.length > 0) {
+                  type = node.typeArguments[0].getText(sourceFile);
+                }
+
+                if (!result.states.some((s) => s.name === name)) {
+                  result.states.push({ name, setter, defaultValue, type });
+                }
+              }
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, scanNode);
+    };
+    scanNode(sourceFile);
+  }
+
   return result;
 }
 
 function isReactComponentName(name: string): boolean {
-  return /^[A-Z]/.test(name);
+  if (!name) return false;
+  const firstChar = name[0];
+  return firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase();
 }
 
 function analyzeProps(
@@ -269,7 +320,7 @@ function analyzeProps(
   if (node.parameters.length === 0) return;
   const firstParam = node.parameters[0];
 
-  // 1. Destructured props: function Comp({ name, age = 18 }: Props)
+  // 1. Destructured props
   if (ts.isObjectBindingPattern(firstParam.name)) {
     firstParam.name.elements.forEach((element) => {
       if (ts.isIdentifier(element.name)) {
@@ -285,22 +336,53 @@ function analyzeProps(
             if (member && ts.isPropertySignature(member) && member.type) {
               type = member.type.getText(sourceFile);
             }
+          } else if (ts.isTypeReferenceNode(firstParam.type)) {
+            const typeName = firstParam.type.typeName.getText(sourceFile);
+            type = findPropTypeFromSource(typeName, propName, sourceFile);
           }
         }
-        result.props.push({
-          name: propName,
-          type,
-          defaultValue,
-          required: !element.initializer,
-        });
+        const isFunctionType = type.includes("=>") || type === "Function" || (type.includes("(") && type.includes(")"));
+        const isActionName = (propName.startsWith("on") && propName[2] === propName[2]?.toUpperCase()) ||
+                             ["add", "remove", "save", "delete", "edit", "update", "cancel", "submit", "change", "select"].some((verb) => propName.toLowerCase().includes(verb)) ||
+                             propName.endsWith("Handler") || propName.endsWith("Callback");
+        
+        const isCallback = isFunctionType && isActionName;
+        if (isCallback) {
+          let eventName = propName;
+          if (propName.startsWith("on") && propName[2] === propName[2]?.toUpperCase()) {
+            eventName = propName.slice(2);
+          }
+          // CamelCase to kebab-case
+          let cleanEventName = "";
+          for (let i = 0; i < eventName.length; i++) {
+            const char = eventName[i];
+            if (char === char.toUpperCase() && char !== char.toLowerCase()) {
+              cleanEventName += (i === 0 ? "" : "-") + char.toLowerCase();
+            } else {
+              cleanEventName += char;
+            }
+          }
+
+          result.emits.push({
+            name: propName,
+            eventName: cleanEventName,
+            type
+          });
+        } else {
+          result.props.push({
+            name: propName,
+            type,
+            defaultValue,
+            required: !element.initializer,
+          });
+        }
       }
     });
   }
 
-  // 2. Simple identifier: function Comp(props: Props)
+  // 2. Simple identifier
   if (ts.isIdentifier(firstParam.name)) {
     const propsVarName = firstParam.name.text;
-    // Check if there is destructuring of this parameter inside the function body
     const body = node.body;
     if (body && ts.isBlock(body)) {
       body.statements.forEach((statement) => {
@@ -314,12 +396,58 @@ function analyzeProps(
             ) {
               decl.name.elements.forEach((el) => {
                 if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) {
-                  result.props.push({
-                    name: el.name.text,
-                    type: "any",
-                    defaultValue: el.initializer ? el.initializer.getText(sourceFile) : undefined,
-                    required: !el.initializer,
-                  });
+                  const propName = el.name.text;
+                  
+                  let type = "any";
+                  if (firstParam.type) {
+                    if (ts.isTypeLiteralNode(firstParam.type)) {
+                      const member = firstParam.type.members.find(
+                        (m) => m.name && m.name.getText(sourceFile) === propName
+                      );
+                      if (member && ts.isPropertySignature(member) && member.type) {
+                        type = member.type.getText(sourceFile);
+                      }
+                    } else if (ts.isTypeReferenceNode(firstParam.type)) {
+                      const typeName = firstParam.type.typeName.getText(sourceFile);
+                      type = findPropTypeFromSource(typeName, propName, sourceFile);
+                    }
+                  }
+
+                  const isFunctionType = type.includes("=>") || type === "Function" || (type.includes("(") && type.includes(")"));
+                  const isActionName = (propName.startsWith("on") && propName[2] === propName[2]?.toUpperCase()) ||
+                                       ["add", "remove", "save", "delete", "edit", "update", "cancel", "submit", "change", "select"].some((verb) => propName.toLowerCase().includes(verb)) ||
+                                       propName.endsWith("Handler") || propName.endsWith("Callback");
+                  
+                  const isCallback = isFunctionType && isActionName;
+                  if (isCallback) {
+                    let eventName = propName;
+                    if (propName.startsWith("on") && propName[2] === propName[2]?.toUpperCase()) {
+                      eventName = propName.slice(2);
+                    }
+                    // CamelCase to kebab-case
+                    let cleanEventName = "";
+                    for (let i = 0; i < eventName.length; i++) {
+                      const char = eventName[i];
+                      if (char === char.toUpperCase() && char !== char.toLowerCase()) {
+                        cleanEventName += (i === 0 ? "" : "-") + char.toLowerCase();
+                      } else {
+                        cleanEventName += char;
+                      }
+                    }
+
+                    result.emits.push({
+                      name: propName,
+                      eventName: cleanEventName,
+                      type
+                    });
+                  } else {
+                    result.props.push({
+                      name: propName,
+                      type,
+                      defaultValue: el.initializer ? el.initializer.getText(sourceFile) : undefined,
+                      required: !el.initializer,
+                    });
+                  }
                 }
               });
             }
@@ -340,18 +468,18 @@ function analyzeComponentBody(
 
   if (ts.isBlock(body)) {
     body.statements.forEach((statement) => {
-      // 1. Variable Statements: hooks, states, memos, refs
       if (ts.isVariableStatement(statement)) {
+        let isMatched = false;
         statement.declarationList.declarations.forEach((decl) => {
           if (decl.initializer) {
             const init = decl.initializer;
 
-            // Check Hook Call expressions
             if (ts.isCallExpression(init)) {
               const hookName = init.expression.getText(sourceFile);
 
               // useState
               if (hookName === "useState" || hookName.endsWith(".useState")) {
+                isMatched = true;
                 if (ts.isArrayBindingPattern(decl.name) && decl.name.elements.length >= 1) {
                   const stateVar = decl.name.elements[0];
                   const setterVar = decl.name.elements[1];
@@ -375,6 +503,7 @@ function analyzeComponentBody(
 
               // useReducer
               if (hookName === "useReducer" || hookName.endsWith(".useReducer")) {
+                isMatched = true;
                 if (ts.isArrayBindingPattern(decl.name) && decl.name.elements.length >= 1) {
                   const stateVar = decl.name.elements[0];
                   const dispatchVar = decl.name.elements[1];
@@ -386,7 +515,7 @@ function analyzeComponentBody(
                         : "dispatch";
                     const defaultValue =
                       init.arguments.length > 1 ? init.arguments[1].getText(sourceFile) : "undefined";
-                    result.states.push({ name, setter, defaultValue, type: "any" }); // treated as state for binding purposes
+                    result.states.push({ name, setter, defaultValue, type: "any" });
                   }
                 }
                 return;
@@ -394,6 +523,7 @@ function analyzeComponentBody(
 
               // useRef
               if (hookName === "useRef" || hookName.endsWith(".useRef")) {
+                isMatched = true;
                 if (ts.isIdentifier(decl.name)) {
                   const name = decl.name.text;
                   const defaultValue =
@@ -405,6 +535,7 @@ function analyzeComponentBody(
 
               // useContext
               if (hookName === "useContext" || hookName.endsWith(".useContext")) {
+                isMatched = true;
                 if (ts.isIdentifier(decl.name) && init.arguments.length > 0) {
                   result.contexts.push({
                     variableName: decl.name.text,
@@ -416,6 +547,7 @@ function analyzeComponentBody(
 
               // useMemo
               if (hookName === "useMemo" || hookName.endsWith(".useMemo")) {
+                isMatched = true;
                 if (ts.isIdentifier(decl.name) && init.arguments.length > 0) {
                   const callback = init.arguments[0];
                   let dependencies: string[] = [];
@@ -436,6 +568,7 @@ function analyzeComponentBody(
 
               // useCallback
               if (hookName === "useCallback" || hookName.endsWith(".useCallback")) {
+                isMatched = true;
                 if (ts.isIdentifier(decl.name) && init.arguments.length > 0) {
                   const callback = init.arguments[0];
                   let dependencies: string[] = [];
@@ -454,8 +587,9 @@ function analyzeComponentBody(
                 return;
               }
 
-              // useSelector (Redux) or custom Zustand/Jotai selectors
+              // useSelector / useStore
               if (hookName === "useSelector" || hookName === "useStore") {
+                isMatched = true;
                 if (ts.isIdentifier(decl.name)) {
                   const selector = init.arguments[0]?.getText(sourceFile);
                   result.stores.push({
@@ -470,6 +604,7 @@ function analyzeComponentBody(
 
             // Custom methods defined as helper arrow functions
             if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
+              isMatched = true;
               if (ts.isIdentifier(decl.name)) {
                 result.methods.push({
                   name: decl.name.text,
@@ -485,6 +620,33 @@ function analyzeComponentBody(
             }
           }
         });
+
+        if (!isMatched) {
+          result.methods.push({
+            name: "",
+            node: statement.declarationList.declarations[0],
+            body: statement.getText(sourceFile),
+            params: [],
+            returnType: "any"
+          });
+
+          statement.declarationList.declarations.forEach((decl) => {
+            if (decl.initializer && ts.isCallExpression(decl.initializer)) {
+              const calleeText = decl.initializer.expression.getText(sourceFile);
+              if (calleeText.startsWith("use")) {
+                if (ts.isObjectBindingPattern(decl.name)) {
+                  decl.name.elements.forEach((el) => {
+                    if (ts.isIdentifier(el.name)) {
+                      result.externalStates!.push(el.name.text);
+                    }
+                  });
+                } else if (ts.isIdentifier(decl.name)) {
+                  result.externalStates!.push(decl.name.text);
+                }
+              }
+            }
+          });
+        }
       }
 
       // 2. Normal Function declarations inside component body
@@ -573,11 +735,10 @@ function analyzeClassComponent(
   result: AnalysisResult
 ) {
   node.members.forEach((member) => {
-    // Property declaration (e.g. state = { count: 0 })
+    // Property declaration
     if (ts.isPropertyDeclaration(member) && member.name && ts.isIdentifier(member.name)) {
       const name = member.name.text;
       if (name === "state" && member.initializer) {
-        // Simple state properties
         if (ts.isObjectLiteralExpression(member.initializer)) {
           member.initializer.properties.forEach((prop) => {
             if (prop.name && ts.isIdentifier(prop.name)) {
@@ -592,7 +753,7 @@ function analyzeClassComponent(
       }
     }
 
-    // Constructor (state initialization in constructor)
+    // Constructor
     if (ts.isConstructorDeclaration(member) && member.body) {
       member.body.statements.forEach((statement) => {
         if (
@@ -618,11 +779,10 @@ function analyzeClassComponent(
       });
     }
 
-    // Methods (e.g. handleClick() { ... }, render() { ... })
+    // Methods
     if (ts.isMethodDeclaration(member) && member.name && ts.isIdentifier(member.name)) {
       const methodName = member.name.text;
       if (methodName === "render" && member.body) {
-        // Look for return statement in render
         member.body.statements.forEach((statement) => {
           if (ts.isReturnStatement(statement) && statement.expression) {
             let jsxExpr: ts.Expression | undefined;
@@ -656,4 +816,35 @@ function analyzeClassComponent(
       }
     }
   });
+}
+
+function findPropTypeFromSource(
+  typeName: string,
+  propName: string,
+  sourceFile: ts.SourceFile
+): string {
+  let foundType = "any";
+
+  sourceFile.statements.forEach((statement) => {
+    if (ts.isInterfaceDeclaration(statement) && statement.name.text === typeName) {
+      const member = statement.members.find(
+        (m) => m.name && m.name.getText(sourceFile) === propName
+      );
+      if (member && ts.isPropertySignature(member) && member.type) {
+        foundType = member.type.getText(sourceFile);
+      }
+    }
+    if (ts.isTypeAliasDeclaration(statement) && statement.name.text === typeName) {
+      if (ts.isTypeLiteralNode(statement.type)) {
+        const member = statement.type.members.find(
+          (m) => m.name && m.name.getText(sourceFile) === propName
+        );
+        if (member && ts.isPropertySignature(member) && member.type) {
+          foundType = member.type.getText(sourceFile);
+        }
+      }
+    }
+  });
+
+  return foundType;
 }

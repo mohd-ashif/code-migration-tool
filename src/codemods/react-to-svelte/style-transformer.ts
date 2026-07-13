@@ -30,9 +30,12 @@ export function transformInlineStyle(styleText: string): string {
         .replace(/([A-Z])/g, "-$1")
         .toLowerCase();
 
-      // Detect if value is a simple string literal or number
-      const isStaticString = /^(['"])(.*?)\1$/.test(rawVal);
+      let isStaticString = /^(['"])(.*?)\1$/.test(rawVal);
       const isStaticNumber = /^\d+(\.\d+)?(px|em|rem|%|vh|vw|ms|s)?$/.test(rawVal);
+
+      if (isStaticString && (rawVal.includes("?") || rawVal.includes(":") || rawVal.includes("${") || !/^[a-zA-Z0-9\s#(),.-]+$/.test(rawVal.slice(1, -1)))) {
+        isStaticString = false;
+      }
 
       if (isStaticString) {
         const stringVal = rawVal.slice(1, -1);
@@ -41,7 +44,11 @@ export function transformInlineStyle(styleText: string): string {
         staticParts.push(`${key}: ${rawVal}`);
       } else {
         // Dynamic expression - use Svelte style directive
-        dynamicDirectives.push(`style:${key}={${rawVal}}`);
+        let cleanVal = rawVal;
+        if (/^(['"])(.*?)\1$/.test(cleanVal)) {
+          cleanVal = cleanVal.slice(1, -1).trim();
+        }
+        dynamicDirectives.push(`style:${key}={${cleanVal}}`);
       }
     }
   });

@@ -27,7 +27,7 @@ export function transformRouterNavigation(code: string): RouterTransformationRes
     // e.g., export let id;
     // We can map const { id } = useParams() -> export let id;
     // For simplicity, let's let useParams map to a stub or Svelte route params.
-    transformed = transformed.replace(/const\s+(\w+|\{[\s\S]+?\})\s*=\s*useParams\(\s*\);?/g, (match, paramName) => {
+    transformed = transformed.replace(/const\s+(\w+|\{[\s\S]+?\})\s*=\s*useParams\(\s*\);?/g, (match: string, paramName: string) => {
       if (paramName.startsWith("{")) {
         const props = paramName.slice(1, -1).split(",").map(p => p.trim());
         return props.map(p => `export let ${p};`).join("\n");

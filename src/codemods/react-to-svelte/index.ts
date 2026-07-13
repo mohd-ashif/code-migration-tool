@@ -56,7 +56,7 @@ export function migrateReactProjectToSvelte(files: ParsedFile[]): ParsedFile[] {
     const content = file.content;
 
     // 1. Process package.json
-    if (path === "package.json") {
+    if (path === "package.json" || path.endsWith("/package.json") || path.endsWith("\\package.json")) {
       resultFiles.push({
         path,
         content: generatePackageJson(content),
@@ -67,17 +67,22 @@ export function migrateReactProjectToSvelte(files: ParsedFile[]): ParsedFile[] {
     // 2. Process index.html
     if (path === "index.html" || path.endsWith("index.html")) {
       let cleanHtml = content;
-      cleanHtml = cleanHtml.replace(/id=["']root["']/g, 'id="app"');
-      cleanHtml = cleanHtml.replace(/src\/main\.(tsx|jsx|ts|js)/g, 'src/main.ts');
-      cleanHtml = cleanHtml.replace(/src\/index\.(tsx|jsx|ts|js)/g, 'src/main.ts');
+      cleanHtml = cleanHtml.replace(/id\s*=\s*(["'])root\1/g, 'id="app"');
+      cleanHtml = cleanHtml.replace(/src\s*=\s*(["'])([^"']*)src\/main\.(tsx|jsx)\1/g, 'src="$2src/main.ts"');
+      cleanHtml = cleanHtml.replace(/src\s*=\s*(["'])([^"']*)src\/index\.(tsx|jsx)\1/g, 'src="$2src/main.ts"');
       resultFiles.push({ path, content: cleanHtml });
       return;
     }
 
     // 3. Process tsconfig.json
     if (path === "tsconfig.json" || path.endsWith("tsconfig.json")) {
+      let cleanContent = content;
+      // Strip comments
+      cleanContent = cleanContent.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+      // Strip trailing commas before closing braces/brackets
+      cleanContent = cleanContent.replace(/,\s*([\]}])/g, '$1');
       try {
-        const tsconfig = JSON.parse(content);
+        const tsconfig = JSON.parse(cleanContent);
         if (tsconfig.compilerOptions) {
           // Remove React-specific JSX options
           delete tsconfig.compilerOptions.jsx;
@@ -89,20 +94,30 @@ export function migrateReactProjectToSvelte(files: ParsedFile[]): ParsedFile[] {
         }
         resultFiles.push({ path, content: JSON.stringify(tsconfig, null, 2) });
       } catch (e) {
-        resultFiles.push({ path, content });
+        // Fallback: use regex if parsing still fails
+        let fallbackContent = content;
+        fallbackContent = fallbackContent.replace(/"jsx"\s*:\s*"[^"]+"\s*,?/g, "");
+        fallbackContent = fallbackContent.replace(/,\s*([\]}])/g, '$1');
+        resultFiles.push({ path, content: fallbackContent });
       }
       return;
     }
 
     // 4. Process React Entrypoint (e.g. main.tsx or index.tsx that initializes React)
+    const lowerPath = path.toLowerCase();
     const isEntryPoint =
-      (path.endsWith("main.tsx") ||
-        path.endsWith("main.jsx") ||
-        path.endsWith("index.tsx") ||
-        path.endsWith("index.jsx") ||
-        path.endsWith("main.ts") ||
-        path.endsWith("index.ts")) &&
-      (content.includes("ReactDOM") || content.includes("createRoot") || content.includes("React.createRoot"));
+      (lowerPath.endsWith("main.tsx") ||
+        lowerPath.endsWith("main.jsx") ||
+        lowerPath.endsWith("index.tsx") ||
+        lowerPath.endsWith("index.jsx") ||
+        lowerPath.endsWith("main.ts") ||
+        lowerPath.endsWith("index.ts") ||
+        lowerPath.endsWith("main.js") ||
+        lowerPath.endsWith("index.js")) &&
+      (content.includes("ReactDOM") ||
+        content.includes("createRoot") ||
+        content.includes("React.createRoot") ||
+        content.includes("react-dom"));
 
     if (isEntryPoint) {
       convertedAny = true;

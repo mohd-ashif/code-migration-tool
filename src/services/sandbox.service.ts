@@ -107,6 +107,7 @@ WORKDIR /app
 COPY . .
 RUN apk add --no-cache zip || true
 RUN npm install --no-audit --no-fund || true
+RUN npx nuxi typecheck || true
 RUN npm run build || true
 RUN npm test || true
 RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
@@ -142,21 +143,29 @@ RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
                   return;
                 }
 
-                exec("npm run build", { cwd: scratchDir }, (buildErr, buildStdout, buildStderr) => {
-                  if (buildErr) {
-                    resolve({
-                      success: false,
-                      stage: "build",
-                      errors: [buildStderr || buildErr.message],
-                    });
-                    return;
-                  }
+                exec("npx nuxi typecheck", { cwd: scratchDir }, (typeCheckErr, typeCheckStdout, typeCheckStderr) => {
+                  const typeCheckFailed = !!typeCheckErr;
+                  const typeCheckErrors = typeCheckFailed ? [typeCheckStderr || typeCheckErr.message] : [];
 
-                  resolve({
-                    success: true,
-                    stage: "build",
-                    errors: [],
-                    output: buildStdout,
+                  exec("npm run build", { cwd: scratchDir }, (buildErr, buildStdout, buildStderr) => {
+                    if (typeCheckFailed || buildErr) {
+                      resolve({
+                        success: false,
+                        stage: typeCheckFailed ? "typecheck" : "build",
+                        errors: [
+                          ...typeCheckErrors,
+                          ...(buildErr ? [buildStderr || buildErr.message] : [])
+                        ],
+                      });
+                      return;
+                    }
+
+                    resolve({
+                      success: true,
+                      stage: "build",
+                      errors: [],
+                      output: buildStdout,
+                    });
                   });
                 });
               }
