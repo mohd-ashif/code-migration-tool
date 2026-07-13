@@ -28,7 +28,7 @@ export function generateVueComponent(ir: NuxtComponentIR, sourceFile: ts.SourceF
   const templateCtx = {
     registerMethod: (name: string, body: string) => {
       if (!ir.methods.some((m) => m.name === name)) {
-        ir.methods.push({ name, body, params: [], returnType: "any" });
+        ir.methods.push({ name, body });
       }
     },
     emits: ir.emits,
