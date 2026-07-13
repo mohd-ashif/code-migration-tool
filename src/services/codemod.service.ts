@@ -9,6 +9,7 @@ import { transformReactToSvelte, migrateReactProject } from "../codemods/react/r
 import { migrateNextToReact } from "../codemods/next/next-to-react";
 import { migrateReactProjectToSolid } from "../codemods/react-to-solid";
 import { migrateReactProjectToQwik } from "../codemods/react-to-qwik";
+import { migrateReactProjectToNuxt, migrateReactCodeToNuxt } from "../codemods/react-to-nuxt";
 import { migrateAngularProjectToNext } from "../codemods/angular-to-next";
 
 // Phase 2 compilers
@@ -95,6 +96,10 @@ export async function runCodemod(
     migrated = migrateReactProject(projectFiles);
   } else if (sourceFramework === "typescript" && targetFramework === "svelte") {
     migrated = migrateReactProject(projectFiles);
+  } else if (sourceFramework === "react" && targetFramework === "nuxt") {
+    migrated = migrateReactProjectToNuxt(projectFiles);
+  } else if (sourceFramework === "typescript" && targetFramework === "nuxt") {
+    migrated = migrateReactProjectToNuxt(projectFiles);
   } else {
     // File-by-file fallback mapping
     migrated = projectFiles.map((file) => {
@@ -135,6 +140,10 @@ export async function runCodemod(
         path = result.path;
       } else if (sourceFramework === "react" && targetFramework === "svelte") {
         const result = transformReactToSvelte(content, path);
+        content = result.content;
+        path = result.path;
+      } else if (sourceFramework === "react" && targetFramework === "nuxt") {
+        const result = { content: migrateReactCodeToNuxt(content, path), path: path.replace(/\.(tsx|jsx)$/, ".vue") };
         content = result.content;
         path = result.path;
       } else if (sourceFramework === "typescript" && targetFramework === "vue") {

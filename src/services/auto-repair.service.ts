@@ -3,8 +3,72 @@ import { DiagnosticEngine } from "../diagnostics/diagnostic-engine";
 import { callOpenAI } from "../lib/openai";
 import * as path from "path";
 import * as fs from "fs";
+import { execSync } from "child_process";
 import { config } from "../config";
 import { logger } from "../utils/logger";
+
+/**
+ * Runs a real npm install and npm build loop inside the temporary folder to capture compiler errors.
+ */
+function runBuildDiagnostics(scratchDir: string): any[] {
+  const buildDiagnostics: any[] = [];
+  
+  try {
+    // 1. Run npm install inside sandbox
+    execSync("npm install --no-audit --no-fund", { cwd: scratchDir, stdio: "ignore" });
+  } catch (e) {
+    // Ignore install errors to proceed to compiler check
+  }
+
+  try {
+    // 2. Try building the project
+    execSync("npm run build", { cwd: scratchDir, stdio: "pipe", encoding: "utf8" });
+  } catch (err: any) {
+    const output = (err.stdout || "") + "\n" + (err.stderr || "");
+    const lines = output.split("\n");
+    
+    lines.forEach((line) => {
+      if (line.includes("error TS")) {
+        const parenOpen = line.indexOf("(");
+        const parenClose = line.indexOf(")");
+        const colonAfter = line.indexOf(":", parenClose);
+        
+        if (parenOpen !== -1 && parenClose !== -1 && colonAfter !== -1) {
+          const relPath = line.substring(0, parenOpen).trim();
+          const posStr = line.substring(parenOpen + 1, parenClose);
+          const posParts = posStr.split(",");
+          const lineNum = Number(posParts[0]) || 1;
+          const colNum = Number(posParts[1]) || 1;
+          
+          const rest = line.substring(colonAfter + 1).trim();
+          const tsCodeIndex = rest.indexOf("TS");
+          let code = "TS_ERROR";
+          if (tsCodeIndex !== -1) {
+            // Extracts error number e.g. TS2307
+            const endSpace = rest.indexOf(" ", tsCodeIndex);
+            code = "TS" + (endSpace !== -1 ? rest.substring(tsCodeIndex + 2, endSpace) : rest.substring(tsCodeIndex + 2)).trim();
+          }
+          const message = rest.substring(rest.indexOf(":") + 1).trim();
+
+          buildDiagnostics.push({
+            code,
+            severity: "error",
+            category: "typescript",
+            message,
+            location: {
+              sourceFile: path.resolve(scratchDir, relPath),
+              line: lineNum,
+              character: colNum,
+            },
+            suggestedRepair: "Fix compilation issue in file.",
+            relatedFiles: [path.resolve(scratchDir, relPath)],
+          });
+        }
+      }
+    });
+  }
+  return buildDiagnostics;
+}
 
 /**
  * Iteratively runs validation and applies automated AI repairs for compiler errors,
@@ -51,7 +115,10 @@ export async function autoRepairProject(
       });
 
       // 2. Diagnostics: Run static checks and compiler analysis
-      const diagnostics = DiagnosticEngine.analyze(scratchDir);
+      const diagnostics = [
+        ...DiagnosticEngine.analyze(scratchDir),
+        ...runBuildDiagnostics(scratchDir)
+      ];
       const errors = diagnostics.filter((d) => d.severity === "error");
 
       if (errors.length === 0) {

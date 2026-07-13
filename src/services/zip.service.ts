@@ -36,7 +36,7 @@ export async function extractArchive(zipBuffer: Buffer): Promise<ParsedFile[]> {
   const files: ParsedFile[] = [];
   
   for (const file of directory.files) {
-    if (file.type === "file") {
+    if (file.type === "File") {
       const content = (await file.buffer()).toString("utf8");
       files.push({
         path: file.path,

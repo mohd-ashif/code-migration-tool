@@ -28,7 +28,7 @@ export function transformJSXToSvelteTemplate(
       // Handle React Suspense mapping to Svelte {#await} block
       if (tagName === "Suspense") {
         const fallbackAttr = opening.attributes.properties.find(
-          (p) => ts.isJsxAttribute(p) && p.name.text === "fallback"
+          (p) => ts.isJsxAttribute(p) && p.name.getText(sourceFile) === "fallback"
         );
         let fallbackHtml = "";
         if (fallbackAttr && ts.isJsxAttribute(fallbackAttr) && fallbackAttr.initializer) {
@@ -197,7 +197,7 @@ export function transformJSXToSvelteTemplate(
     // Check for controlled input pattern value={} onChange={}
     attributes.properties.forEach((prop) => {
       if (ts.isJsxAttribute(prop) && prop.name) {
-        const name = prop.name.text;
+        const name = prop.name.getText(sourceFile);
         if (name === "value" && prop.initializer && ts.isJsxExpression(prop.initializer) && prop.initializer.expression) {
           hasValue = true;
           valueExpr = prop.initializer.expression.getText(sourceFile);
@@ -216,7 +216,7 @@ export function transformJSXToSvelteTemplate(
 
     attributes.properties.forEach((prop) => {
       if (ts.isJsxAttribute(prop)) {
-        const name = prop.name.text;
+        const name = prop.name.getText(sourceFile);
 
         // Skip value and onChange for controlled inputs since we bound them
         if (isControlledInput && (name === "value" || name === "onChange")) {
@@ -308,7 +308,7 @@ export function transformJSXToSvelteTemplate(
       if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n)) {
         const attrs = ts.isJsxElement(n) ? n.openingElement.attributes : n.attributes;
         attrs.properties.forEach((prop) => {
-          if (ts.isJsxAttribute(prop) && prop.name.text === "key" && prop.initializer) {
+          if (ts.isJsxAttribute(prop) && prop.name.getText(sourceFile) === "key" && prop.initializer) {
             if (ts.isJsxExpression(prop.initializer) && prop.initializer.expression) {
               keyStr = prop.initializer.expression.getText(sourceFile);
             } else if (ts.isStringLiteral(prop.initializer)) {

@@ -2,6 +2,7 @@ import * as ts from "typescript";
 import {
   AnalysisResult,
   ReactProp,
+  ReactEmit,
   ReactState,
   ReactRef,
   ReactMemo,
@@ -13,9 +14,10 @@ import {
   ReactImport,
 } from "./semantic-analyzer";
 
-export interface SvelteComponentIR {
+export interface NuxtComponentIR {
   name: string;
   props: ReactProp[];
+  emits: ReactEmit[];
   states: ReactState[];
   refs: ReactRef[];
   memos: ReactMemo[];
@@ -29,12 +31,14 @@ export interface SvelteComponentIR {
   template: string;
   imports: ReactImport[];
   extraStatements: string[];
+  externalStates: string[];
 }
 
-export function buildComponentIR(analysis: AnalysisResult): SvelteComponentIR {
+export function buildComponentIR(analysis: AnalysisResult): NuxtComponentIR {
   return {
     name: analysis.componentName,
     props: analysis.props,
+    emits: analysis.emits,
     states: analysis.states,
     refs: analysis.refs,
     memos: analysis.memos,
@@ -48,5 +52,6 @@ export function buildComponentIR(analysis: AnalysisResult): SvelteComponentIR {
     template: analysis.jsxTemplate || "",
     imports: analysis.imports,
     extraStatements: analysis.extraStatements,
+    externalStates: analysis.externalStates || [],
   };
 }

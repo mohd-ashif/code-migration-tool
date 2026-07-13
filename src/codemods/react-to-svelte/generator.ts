@@ -78,6 +78,44 @@ export function generateSvelteComponent(ir: SvelteComponentIR, sourceFile: ts.So
 
     return body;
   });
+  // 6a. Transform callback hooks to standard helper functions
+  const callbacksCode = ir.callbacks.map((c) => {
+    let body = c.body;
+    body = transformStateSetters(body, ir.states);
+    body = transformRefs(body, ir.refs);
+    const storeRes = transformStores(body, ir.stores);
+    body = storeRes.code;
+    const routerRes = transformRouterNavigation(body);
+    body = routerRes.code;
+    return `const ${c.name} = ${body};`;
+  });
+
+  // 6b. Transform memo hooks to Svelte reactive declarations
+  const memosCode = ir.memos.map((m) => {
+    let body = m.body;
+    body = transformStateSetters(body, ir.states);
+    body = transformRefs(body, ir.refs);
+    const storeRes = transformStores(body, ir.stores);
+    body = storeRes.code;
+    const routerRes = transformRouterNavigation(body);
+    body = routerRes.code;
+
+    // Try to extract a clean expression from the arrow function (e.g., () => number * 2)
+    const arrowMatch = body.match(/^\s*(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>\s*([\s\S]+)$/);
+    let expr = body;
+    if (arrowMatch) {
+      const inner = arrowMatch[1].trim();
+      if (!inner.startsWith("{")) {
+        expr = inner;
+      } else {
+        expr = `(${body})()`;
+      }
+    } else {
+      expr = `(${body})()`;
+    }
+
+    return `$: ${m.name} = ${expr};`;
+  });
 
   // 7. Rewrite imports
   const rewrittenImports = rewriteImports(ir.imports, {
@@ -113,12 +151,19 @@ export function generateSvelteComponent(ir: SvelteComponentIR, sourceFile: ts.So
   const scriptBlocks = [
     ...rewrittenImports,
     "",
+    // Extra top-level helper statements & types (like interfaces)
+    ...ir.extraStatements,
+    "",
     // Props
     ...propsCode,
     "",
     // States & Refs
     ...statesCode,
     ...refsCode,
+    "",
+    // Memos & Callbacks
+    ...memosCode,
+    ...callbacksCode,
     "",
     // Context declarations
     ...contextRes.declarations,

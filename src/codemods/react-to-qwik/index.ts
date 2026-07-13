@@ -202,13 +202,13 @@ export function migrateReactCodeToQwik(sourceCode: string, filePath: string): st
             // onClick -> onClick$
             return ts.factory.createJsxAttribute(
               ts.factory.createIdentifier(`${attrName}$`),
-              visit(node.initializer) as any
+              node.initializer ? (visit(node.initializer) as ts.JsxAttributeValue) : undefined
             );
           }
           if (attrName === "className") {
             return ts.factory.createJsxAttribute(
               ts.factory.createIdentifier("class"),
-              visit(node.initializer) as any
+              node.initializer ? (visit(node.initializer) as ts.JsxAttributeValue) : undefined
             );
           }
         }

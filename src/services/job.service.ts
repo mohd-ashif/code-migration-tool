@@ -4,6 +4,7 @@ import { enqueueMigration, migrationQueue } from "../queues/migration.queue";
 import { activeJobs } from "../queues/workers/migration.worker";
 import { queryDatabase, dbPool } from "../lib/database";
 import { logger } from "../utils/logger";
+import { config } from "../config";
 
 export interface JobRecord {
   id: string;
@@ -38,7 +39,28 @@ export function enqueueMigrationJob(request: MigrationRequest): JobRecord {
 
   // ensure the jobId is attached and emit to queue
   const submission: MigrationRequest = { ...request, jobId: id };
-  enqueueMigration(submission);
+  
+  if (!config.REDIS_URL) {
+    logger.info(`No Redis configured. Running migration job ${id} synchronously in the background.`);
+    (async () => {
+      const { migrateProject } = require("./migration.service");
+      try {
+        await updateJobProgress(id, 10);
+        const result = await migrateProject(
+          submission,
+          async (progressPercent: number) => {
+            await updateJobProgress(id, progressPercent);
+          }
+        );
+        await markJobCompleted(id, result);
+      } catch (err: any) {
+        logger.error(`Job ${id} failed: ${err.message}`);
+        await markJobFailed(id, err.message);
+      }
+    })();
+  } else {
+    enqueueMigration(submission);
+  }
 
   return job;
 }
@@ -125,7 +147,7 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
   }
 
   // Enrich progress dynamically from BullMQ if actively in progress or waiting
-  if (job && (job.status === "pending" || job.status === "processing")) {
+  if (config.REDIS_URL && job && (job.status === "pending" || job.status === "processing")) {
     try {
       const bullJob = await migrationQueue.getJob(jobId);
       if (bullJob) {
@@ -178,15 +200,17 @@ export async function cancelJob(jobId: string): Promise<boolean> {
   }
 
   // 2. Remove job from BullMQ queue (handles waiting / delayed states)
-  try {
-    const bullJob = await migrationQueue.getJob(jobId);
-    if (bullJob) {
-      await bullJob.remove();
-      logger.info(`Removed job ${jobId} from BullMQ queue`);
-      cancelled = true;
+  if (config.REDIS_URL) {
+    try {
+      const bullJob = await migrationQueue.getJob(jobId);
+      if (bullJob) {
+        await bullJob.remove();
+        logger.info(`Removed job ${jobId} from BullMQ queue`);
+        cancelled = true;
+      }
+    } catch (err) {
+      logger.error(`Error removing job ${jobId} from BullMQ queue: ${err}`);
     }
-  } catch (err) {
-    logger.error(`Error removing job ${jobId} from BullMQ queue: ${err}`);
   }
 
   // 3. Mark the job state as 'cancelled'
