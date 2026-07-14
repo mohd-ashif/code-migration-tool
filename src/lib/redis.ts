@@ -4,6 +4,12 @@ import { logger } from "../utils/logger";
 
 export const redisClient: RedisClientType | null = config.REDIS_URL ? createClient({ url: config.REDIS_URL }) : null;
 
+if (redisClient) {
+  redisClient.on("error", (err) => {
+    logger.error(`Redis socket error: ${err.message || err}`);
+  });
+}
+
 export async function connectRedis() {
   if (!redisClient) {
     logger.info("Redis URL is not configured. Skipping Redis connection.");
