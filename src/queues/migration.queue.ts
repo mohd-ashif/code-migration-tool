@@ -11,6 +11,8 @@ logger.info(`Initializing BullMQ connection to Redis URL: ${redisUrl.split("@").
 export const queueConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
+  connectTimeout: 15000, // 15s timeout before timing out
+  tls: redisUrl.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
 });
 
 queueConnection.on("connect", () => {

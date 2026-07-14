@@ -100,9 +100,9 @@ export async function handleGetGraph(req: Request, res: Response, next: NextFunc
         }
       }
 
-      // Filter edges to return only those connected to paginated nodes
+      // Filter edges to return only those connected to paginated nodes where BOTH nodes are rendered
       const paginatedEdges = allEdges.filter(
-        (edge) => paginatedNodeIds.has(edge.source) || paginatedNodeIds.has(edge.target)
+        (edge) => paginatedNodeIds.has(edge.source) && paginatedNodeIds.has(edge.target)
       );
 
       // Count metrics

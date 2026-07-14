@@ -4,6 +4,12 @@ import { logger } from "../utils/logger";
 
 export const dbPool = config.DATABASE_URL ? new Pool({ connectionString: config.DATABASE_URL }) : null;
 
+if (dbPool) {
+  dbPool.on("error", (err) => {
+    logger.error(`Unexpected database pool error: ${err.message || err}`);
+  });
+}
+
 if (config.DATABASE_URL) {
   logger.info("Postgres database configured.");
 } else {
