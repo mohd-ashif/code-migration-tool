@@ -4,31 +4,45 @@ import { config } from "../config";
 import { MigrationRequest } from "../types/migration.types";
 import { logger } from "../utils/logger";
 
-const redisUrl = config.REDIS_URL || "redis://127.0.0.1:6379";
+const redisUrl = config.REDIS_URL;
 
-logger.info(`Initializing BullMQ connection to Redis URL: ${redisUrl.split("@").pop()}`); // Log host safely
+export const queueConnection = redisUrl
+  ? new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      connectTimeout: 15000, // 15s timeout
+      tls: redisUrl.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
+    })
+  : null;
 
-export const queueConnection = new Redis(redisUrl, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-  connectTimeout: 15000, // 15s timeout before timing out
-  tls: redisUrl.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
-});
+if (queueConnection) {
+  logger.info(`Initializing BullMQ connection to Redis URL: ${redisUrl.split("@").pop()}`);
+  
+  queueConnection.on("connect", () => {
+    logger.info("Redis queue connection established successfully.");
+  });
 
-queueConnection.on("connect", () => {
-  logger.info("Redis queue connection established successfully.");
-});
+  queueConnection.on("error", (err: any) => {
+    logger.error(`Redis queue connection error: ${err}`);
+  });
+} else {
+  logger.info("Redis URL is not configured. Skipping BullMQ Redis initialization.");
+}
 
-queueConnection.on("error", (err: any) => {
-  logger.error(`Redis queue connection error: ${err}`);
-});
-
-export const migrationQueue = new Queue("migration-jobs", {
-  connection: queueConnection as any,
-});
+export const migrationQueue = queueConnection
+  ? new Queue("migration-jobs", {
+      connection: queueConnection as any,
+    })
+  : null;
 
 export async function enqueueMigration(request: MigrationRequest) {
   const jobId = request.jobId;
+  
+  if (!migrationQueue) {
+    logger.info(`Redis URL is not configured. Skipping queue add for job ${jobId ?? "(no-id)"}.`);
+    return;
+  }
+
   logger.info(`Adding job ${jobId ?? "(no-id)"} to BullMQ migration queue`);
   
   try {

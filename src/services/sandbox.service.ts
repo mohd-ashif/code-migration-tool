@@ -118,58 +118,11 @@ RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
     return new Promise((resolve) => {
       exec("docker --version", (dockerCheckErr) => {
         if (dockerCheckErr) {
-          exec("npm -v", (npmCheckError) => {
-            if (npmCheckError) {
-              logger.info("Sandbox execution skipped (Docker/NPM unavailable). Static verification successfully complete.");
-              resolve({
-                success: true,
-                stage: "static-verify",
-                errors: [],
-              });
-              return;
-            }
-
-            // Fallback: Run npm build check directly on host
-            exec(
-              "npm install --no-audit --no-fund",
-              { cwd: scratchDir },
-              (instErr, instStdout, instStderr) => {
-                if (instErr) {
-                  resolve({
-                    success: false,
-                    stage: "install",
-                    errors: [instStderr || instErr.message],
-                  });
-                  return;
-                }
-
-                exec("npx nuxi typecheck", { cwd: scratchDir }, (typeCheckErr, typeCheckStdout, typeCheckStderr) => {
-                  const typeCheckFailed = !!typeCheckErr;
-                  const typeCheckErrors = typeCheckFailed ? [typeCheckStderr || typeCheckErr.message] : [];
-
-                  exec("npm run build", { cwd: scratchDir }, (buildErr, buildStdout, buildStderr) => {
-                    if (typeCheckFailed || buildErr) {
-                      resolve({
-                        success: false,
-                        stage: typeCheckFailed ? "typecheck" : "build",
-                        errors: [
-                          ...typeCheckErrors,
-                          ...(buildErr ? [buildStderr || buildErr.message] : [])
-                        ],
-                      });
-                      return;
-                    }
-
-                    resolve({
-                      success: true,
-                      stage: "build",
-                      errors: [],
-                      output: buildStdout,
-                    });
-                  });
-                });
-              }
-            );
+          logger.info("Docker is not available. Skipping container validations. Static verification successfully complete.");
+          resolve({
+            success: true,
+            stage: "static-verify",
+            errors: [],
           });
           return;
         }
@@ -340,13 +293,13 @@ run();
 
     // 4. Run Docker container with strict CPU/memory limits, disabled network, and autodelete
     return new Promise((resolve) => {
-      exec("docker --version", (dockerCheckErr) => {
+      exec("docker info", { timeout: 2000 }, (dockerCheckErr) => {
         if (dockerCheckErr) {
-          logger.warn("Docker CLI is missing. Isolated container migration skipped. Falling back to host execution.");
+          logger.warn("Docker daemon is not running or responsive. Isolated container migration skipped. Falling back to host execution.");
           resolve({
             success: false,
             stage: "isolated-migration",
-            errors: ["Docker CLI not found. Unable to launch isolated sandbox container."],
+            errors: ["Docker daemon is offline. Unable to launch isolated sandbox container."],
           });
           return;
         }

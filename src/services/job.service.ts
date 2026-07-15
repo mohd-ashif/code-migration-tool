@@ -67,6 +67,11 @@ export function enqueueMigrationJob(request: MigrationRequest): JobRecord {
 
 export async function updateJobProgress(jobId: string, progress: number) {
   const originalJob = jobStore.get(jobId);
+  
+  if (originalJob && (originalJob.status === "completed" || originalJob.status === "failed")) {
+    return;
+  }
+
   jobStore.set(jobId, {
     id: jobId,
     status: "processing",
@@ -79,7 +84,7 @@ export async function updateJobProgress(jobId: string, progress: number) {
   if (!dbPool) return;
   try {
     await queryDatabase(
-      "UPDATE migration_jobs SET status = 'processing'::varchar, progress = $1::integer, updated_at = NOW() WHERE id = $2::uuid",
+      "UPDATE migration_jobs SET status = 'processing'::varchar, progress = $1::integer, updated_at = NOW() WHERE id = $2::uuid AND status NOT IN ('completed'::varchar, 'failed'::varchar)",
       [progress, jobId]
     );
   } catch (err) {

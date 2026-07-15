@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import { logger } from "./utils/logger";
 
-dotenv.config();
+dotenv.config({ override: true });
 const envFile = `.env.${process.env.NODE_ENV || "development"}`;
 dotenv.config({ path: envFile, override: true });
 
