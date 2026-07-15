@@ -67,6 +67,9 @@ export async function handleGetGraph(req: Request, res: Response, next: NextFunc
           file: node.relativePath,
           isCircular: circularIds.has(node.id),
           isUnused: unusedIds.has(node.id),
+          importCount: semanticGraph.getDependencies(node.id).length,
+          usedByCount: semanticGraph.getDependents(node.id).length,
+          imports: semanticGraph.getDependencies(node.id).map(d => d.relativePath),
         };
       });
 
