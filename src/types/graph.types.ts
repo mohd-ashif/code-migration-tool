@@ -5,6 +5,9 @@ export interface GraphNode {
   file: string;
   isCircular: boolean;
   isUnused: boolean;
+  importCount?: number;
+  usedByCount?: number;
+  imports?: string[];
 }
 
 export interface GraphEdge {
