@@ -152,9 +152,10 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
   }
 
   // Enrich progress dynamically from BullMQ if actively in progress or waiting
-  if (config.REDIS_URL && job && (job.status === "pending" || job.status === "processing")) {
+  const activeQueue = migrationQueue;
+  if (config.REDIS_URL && activeQueue && job && (job.status === "pending" || job.status === "processing")) {
     try {
-      const bullJob = await migrationQueue.getJob(jobId);
+      const bullJob = await activeQueue.getJob(jobId);
       if (bullJob) {
         const progress = bullJob.progress;
         if (typeof progress === "number") {
@@ -205,9 +206,10 @@ export async function cancelJob(jobId: string): Promise<boolean> {
   }
 
   // 2. Remove job from BullMQ queue (handles waiting / delayed states)
-  if (config.REDIS_URL) {
+  const activeQueueForCancel = migrationQueue;
+  if (config.REDIS_URL && activeQueueForCancel) {
     try {
-      const bullJob = await migrationQueue.getJob(jobId);
+      const bullJob = await activeQueueForCancel.getJob(jobId);
       if (bullJob) {
         await bullJob.remove();
         logger.info(`Removed job ${jobId} from BullMQ queue`);
