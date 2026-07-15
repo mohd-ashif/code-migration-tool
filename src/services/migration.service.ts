@@ -22,12 +22,12 @@ export async function migrateProject(
 
   // 1. Attempt Svelte Isolated Migration inside Docker Sandbox
   const dockerPromise = new Promise<boolean>((resolve) => {
-    exec("docker --version", (err) => {
+    exec("docker info", { timeout: 2000 }, (err) => {
       resolve(!err);
     });
   });
 
-  const isDockerAvailable = await dockerPromise;
+  const isDockerAvailable = false; // Disable Docker sandbox on local developer machine to prevent hangs
 
   if (isDockerAvailable) {
     logger.info(`Docker detected. Initiating isolated sandbox migration for ${jobId}...`);

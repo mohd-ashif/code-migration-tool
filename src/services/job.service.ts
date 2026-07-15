@@ -67,6 +67,11 @@ export function enqueueMigrationJob(request: MigrationRequest): JobRecord {
 
 export async function updateJobProgress(jobId: string, progress: number) {
   const originalJob = jobStore.get(jobId);
+  
+  if (originalJob && (originalJob.status === "completed" || originalJob.status === "failed")) {
+    return;
+  }
+
   jobStore.set(jobId, {
     id: jobId,
     status: "processing",
@@ -79,7 +84,7 @@ export async function updateJobProgress(jobId: string, progress: number) {
   if (!dbPool) return;
   try {
     await queryDatabase(
-      "UPDATE migration_jobs SET status = 'processing'::varchar, progress = $1::integer, updated_at = NOW() WHERE id = $2::uuid",
+      "UPDATE migration_jobs SET status = 'processing'::varchar, progress = $1::integer, updated_at = NOW() WHERE id = $2::uuid AND status NOT IN ('completed'::varchar, 'failed'::varchar)",
       [progress, jobId]
     );
   } catch (err) {
@@ -147,9 +152,10 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
   }
 
   // Enrich progress dynamically from BullMQ if actively in progress or waiting
-  if (config.REDIS_URL && job && (job.status === "pending" || job.status === "processing")) {
+  const activeQueue = migrationQueue;
+  if (config.REDIS_URL && activeQueue && job && (job.status === "pending" || job.status === "processing")) {
     try {
-      const bullJob = await migrationQueue.getJob(jobId);
+      const bullJob = await activeQueue.getJob(jobId);
       if (bullJob) {
         const progress = bullJob.progress;
         if (typeof progress === "number") {
@@ -200,9 +206,10 @@ export async function cancelJob(jobId: string): Promise<boolean> {
   }
 
   // 2. Remove job from BullMQ queue (handles waiting / delayed states)
-  if (config.REDIS_URL) {
+  const activeQueueForCancel = migrationQueue;
+  if (config.REDIS_URL && activeQueueForCancel) {
     try {
-      const bullJob = await migrationQueue.getJob(jobId);
+      const bullJob = await activeQueueForCancel.getJob(jobId);
       if (bullJob) {
         await bullJob.remove();
         logger.info(`Removed job ${jobId} from BullMQ queue`);
