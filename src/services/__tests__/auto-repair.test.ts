@@ -7,6 +7,12 @@ jest.mock("../../lib/openai", () => ({
   callOpenAI: jest.fn(),
 }));
 
+jest.mock("../../config", () => ({
+  config: {
+    OPENAI_API_KEY: "mock-openai-key",
+  },
+}));
+
 describe("AutoRepairService", () => {
   beforeEach(() => {
     jest.clearAllMocks();

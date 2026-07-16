@@ -8,8 +8,12 @@ import reportRoutes from "./routes/report.routes";
 import downloadRoutes from "./routes/download.routes";
 import jobsRoutes from "./routes/jobs.routes";
 import graphRoutes from "./routes/graph.routes";
+import authRoutes from "./routes/auth.routes";
+import workspaceRoutes from "./routes/workspace.routes";
+import "./services/mail.service";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
+import { workspaceMiddleware } from "./middleware/workspace.middleware";
 import { errorHandler } from "./middleware/error.middleware";
 import { connectRedis } from "./lib/redis";
 import { initializeDatabase } from "./lib/database";
@@ -27,12 +31,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 app.use(rateLimitMiddleware);
 app.use(authMiddleware);
+app.use(workspaceMiddleware);
 
 app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     message: "Migration tool backend is running.",
-    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs", "/api/graph"],
+    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs", "/api/graph", "/api/auth"],
   });
 });
 
@@ -42,6 +47,8 @@ app.use("/api/report", reportRoutes);
 app.use("/api/download", downloadRoutes);
 app.use("/api/jobs", jobsRoutes);
 app.use("/api/graph", graphRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/workspace", workspaceRoutes);
 
 app.get("/api/sample", (_req, res) => {
   const path = require("path");

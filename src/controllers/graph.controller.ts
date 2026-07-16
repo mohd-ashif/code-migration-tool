@@ -50,8 +50,10 @@ export async function handleGetGraph(req: Request, res: Response, next: NextFunc
       const unusedIds = GraphAnalyzer.detectUnused(semanticGraph);
 
       // Compile nodes
-      const allNodes: GraphNode[] = semanticGraph.getNodes().map((node) => {
-        let type: GraphNode["type"] = "unknown";
+      const allNodes: GraphNode[] = semanticGraph.getNodes()
+        .filter((node) => node.symbolType !== "import" && node.symbolType !== "export")
+        .map((node) => {
+          let type: GraphNode["type"] = "unknown";
         if (
           ["component", "hook", "class", "interface", "enum", "function", "import", "export"].includes(
             node.symbolType

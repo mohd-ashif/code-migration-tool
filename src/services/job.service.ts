@@ -17,25 +17,25 @@ export interface JobRecord {
 
 const jobStore = new Map<string, JobRecord>();
 
-export async function persistJobToDb(id: string, request: MigrationRequest) {
+export async function persistJobToDb(id: string, request: MigrationRequest, workspaceId?: string, userId?: string) {
   if (!dbPool) return;
   try {
     await queryDatabase(
-      "INSERT INTO migration_jobs (id, status, request, progress) VALUES ($1::uuid, $2::varchar, $3::jsonb, $4::integer) ON CONFLICT (id) DO NOTHING",
-      [id, "pending", JSON.stringify(request), 0]
+      "INSERT INTO migration_jobs (id, status, request, progress, workspace_id, user_id) VALUES ($1::uuid, $2::varchar, $3::jsonb, $4::integer, $5::uuid, $6::uuid) ON CONFLICT (id) DO NOTHING",
+      [id, "pending", JSON.stringify(request), 0, workspaceId ?? null, userId ?? null]
     );
   } catch (err) {
     logger.error(`Failed to persist job ${id}: ${err}`);
   }
 }
 
-export function enqueueMigrationJob(request: MigrationRequest): JobRecord {
+export function enqueueMigrationJob(request: MigrationRequest, workspaceId?: string, userId?: string): JobRecord {
   const id = request.jobId ?? uuidv4();
   const job: JobRecord = { id, status: "pending", progress: 0, result: null, message: null, request };
   jobStore.set(id, job);
 
   // persist to DB if configured
-  persistJobToDb(id, request);
+  persistJobToDb(id, request, workspaceId, userId);
 
   // ensure the jobId is attached and emit to queue
   const submission: MigrationRequest = { ...request, jobId: id };
@@ -120,16 +120,17 @@ export async function markJobFailed(jobId: string, message?: string) {
   }
 }
 
-export async function getJobResult(jobId: string): Promise<JobRecord | undefined> {
+export async function getJobResult(jobId: string, workspaceId?: string): Promise<JobRecord | undefined> {
   let job: JobRecord | undefined;
 
   // prefer DB if available
   if (dbPool) {
     try {
-      const rows = await queryDatabase(
-        "SELECT id, status, request, result, message, progress FROM migration_jobs WHERE id = $1::uuid",
-        [jobId]
-      );
+      const queryStr = workspaceId
+        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid AND workspace_id = $2::uuid"
+        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid";
+      const params = workspaceId ? [jobId, workspaceId] : [jobId];
+      const rows = await queryDatabase(queryStr, params);
       if (rows && rows.length) {
         const r = rows[0] as any;
         job = {
@@ -139,7 +140,10 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
           result: r.result ?? null,
           message: r.message ?? null,
           progress: r.progress ?? 0,
-        };
+          workspace_id: r.workspace_id ?? null,
+          user_id: r.user_id ?? null,
+          created_at: r.created_at ?? null,
+        } as any;
       }
     } catch (err) {
       logger.error(`Failed to read job ${jobId} from DB: ${err}`);
@@ -174,17 +178,25 @@ export async function getJobResult(jobId: string): Promise<JobRecord | undefined
   return job;
 }
 
-export async function listJobs(): Promise<JobRecord[]> {
+export async function listJobs(workspaceId?: string): Promise<JobRecord[]> {
   if (dbPool) {
     try {
-      const rows = await queryDatabase("SELECT id, status, result, message, progress FROM migration_jobs ORDER BY created_at DESC LIMIT 50");
+      const queryStr = workspaceId
+        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE workspace_id = $1::uuid ORDER BY created_at DESC LIMIT 50"
+        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs ORDER BY created_at DESC LIMIT 50";
+      const params = workspaceId ? [workspaceId] : [];
+      const rows = await queryDatabase(queryStr, params);
       if (rows) {
         return rows.map((r: any) => ({
           id: r.id,
           status: r.status,
+          request: r.request ?? null,
           result: r.result ?? null,
           message: r.message ?? null,
           progress: r.progress ?? 0,
+          workspace_id: r.workspace_id ?? null,
+          user_id: r.user_id ?? null,
+          created_at: r.created_at ?? null,
         }));
       }
     } catch (err) {
@@ -194,7 +206,7 @@ export async function listJobs(): Promise<JobRecord[]> {
   return Array.from(jobStore.values());
 }
 
-export async function cancelJob(jobId: string): Promise<boolean> {
+export async function cancelJob(jobId: string, workspaceId?: string): Promise<boolean> {
   let cancelled = false;
 
   // 1. Abort active execution if running in our worker
@@ -234,10 +246,11 @@ export async function cancelJob(jobId: string): Promise<boolean> {
 
     if (dbPool) {
       try {
-        await queryDatabase(
-          "UPDATE migration_jobs SET status = 'cancelled'::varchar, message = $1::text, updated_at = NOW() WHERE id = $2::uuid",
-          ["Job cancelled by user", jobId]
-        );
+        const queryStr = workspaceId
+          ? "UPDATE migration_jobs SET status = 'cancelled'::varchar, message = $1::text, updated_at = NOW() WHERE id = $2::uuid AND workspace_id = $3::uuid"
+          : "UPDATE migration_jobs SET status = 'cancelled'::varchar, message = $1::text, updated_at = NOW() WHERE id = $2::uuid";
+        const params = workspaceId ? ["Job cancelled by user", jobId, workspaceId] : ["Job cancelled by user", jobId];
+        await queryDatabase(queryStr, params);
       } catch (err) {
         logger.error(`Failed to update job ${jobId} status to cancelled: ${err}`);
       }

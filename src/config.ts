@@ -14,6 +14,19 @@ export interface AppConfig {
   SUPABASE_URL: string;
   SUPABASE_KEY: string;
   OPENAI_API_KEY: string;
+  JWT_SECRET: string;
+  JWT_REFRESH_SECRET: string;
+  SMTP_HOST?: string;
+  SMTP_PORT?: number;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
+  SMTP_FROM?: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  GOOGLE_REDIRECT_URI: string;
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  GITHUB_REDIRECT_URI: string;
 }
 
 export const config: AppConfig = {
@@ -25,6 +38,19 @@ export const config: AppConfig = {
   SUPABASE_URL: process.env.SUPABASE_URL?.trim() || "",
   SUPABASE_KEY: process.env.SUPABASE_KEY?.trim() || "",
   OPENAI_API_KEY: process.env.OPENAI_API_KEY?.trim() || "",
+  JWT_SECRET: process.env.JWT_SECRET?.trim() || "default-secret-key-for-migration-tool-jwt-12345",
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET?.trim() || "default-refresh-secret-key-for-migration-tool-jwt-12345",
+  SMTP_HOST: process.env.SMTP_HOST?.trim(),
+  SMTP_PORT: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined,
+  SMTP_USER: process.env.SMTP_USER?.trim(),
+  SMTP_PASS: process.env.SMTP_PASS?.trim(),
+  SMTP_FROM: process.env.SMTP_FROM?.trim(),
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID?.trim() || "default-google-client-id",
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET?.trim() || "default-google-client-secret",
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI?.trim() || "http://localhost:4000/api/auth/google/callback",
+  GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID?.trim() || "default-github-client-id",
+  GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET?.trim() || "default-github-client-secret",
+  GITHUB_REDIRECT_URI: process.env.GITHUB_REDIRECT_URI?.trim() || "http://localhost:4000/api/auth/github/callback",
 };
 
 export function validateEnv() {

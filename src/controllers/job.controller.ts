@@ -4,7 +4,8 @@ import { getJobResult, listJobs, cancelJob } from "../services/job.service";
 export async function handleJobStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const jobId = req.params.jobId as string;
-    const job = await getJobResult(jobId);
+    const workspaceId = (req as any).workspaceId;
+    const job = await getJobResult(jobId, workspaceId);
     if (!job) {
       return res.status(404).json({ success: false, message: "Job not found." });
     }
@@ -16,7 +17,8 @@ export async function handleJobStatus(req: Request, res: Response, next: NextFun
 
 export async function handleListJobs(req: Request, res: Response, next: NextFunction) {
   try {
-    const jobs = await listJobs();
+    const workspaceId = (req as any).workspaceId;
+    const jobs = await listJobs(workspaceId);
     res.json({ success: true, jobs });
   } catch (error) {
     next(error);
@@ -26,7 +28,8 @@ export async function handleListJobs(req: Request, res: Response, next: NextFunc
 export async function handleCancelJob(req: Request, res: Response, next: NextFunction) {
   try {
     const jobId = req.params.jobId as string;
-    const cancelled = await cancelJob(jobId);
+    const workspaceId = (req as any).workspaceId;
+    const cancelled = await cancelJob(jobId, workspaceId);
     if (!cancelled) {
       return res.status(404).json({ success: false, message: "Job not found or already completed/cancelled." });
     }
