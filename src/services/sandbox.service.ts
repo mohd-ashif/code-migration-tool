@@ -94,6 +94,12 @@ export async function validateProject(
     });
 
     if (staticErrors.length > 0) {
+      try {
+        if (fs.existsSync(scratchDir)) {
+          fs.rmSync(scratchDir, { recursive: true, force: true });
+        }
+      } catch (e) {}
+
       return {
         success: false,
         stage: "static-verify",
@@ -119,6 +125,12 @@ RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
       exec("docker --version", (dockerCheckErr) => {
         if (dockerCheckErr) {
           logger.info("Docker is not available. Skipping container validations. Static verification successfully complete.");
+          try {
+            if (fs.existsSync(scratchDir)) {
+              fs.rmSync(scratchDir, { recursive: true, force: true });
+            }
+          } catch (e) {}
+
           resolve({
             success: true,
             stage: "static-verify",
@@ -136,6 +148,12 @@ RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
           { cwd: scratchDir },
           (buildErr, buildStdout, buildStderr) => {
             if (buildErr) {
+              try {
+                if (fs.existsSync(scratchDir)) {
+                  fs.rmSync(scratchDir, { recursive: true, force: true });
+                }
+              } catch (e) {}
+
               resolve({
                 success: false,
                 stage: "docker",
@@ -162,6 +180,12 @@ RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
 
                     // Remove container and image
                     exec(`docker rm -f ${containerName} && docker rmi ${imageName}`, () => {
+                      try {
+                        if (fs.existsSync(scratchDir)) {
+                          fs.rmSync(scratchDir, { recursive: true, force: true });
+                        }
+                      } catch (e) {}
+
                       resolve({
                         success: !runErr,
                         stage: "docker",
@@ -179,20 +203,17 @@ RUN zip -r /app/output.zip . -x "node_modules/*" -x ".git/*" || true
       });
     });
   } catch (error: any) {
+    try {
+      if (fs.existsSync(scratchDir)) {
+        fs.rmSync(scratchDir, { recursive: true, force: true });
+      }
+    } catch (e) {}
+
     return {
       success: false,
       stage: "static-verify",
       errors: [error.message],
     };
-  } finally {
-    // Cleanup temporary scratch folder
-    try {
-      if (fs.existsSync(scratchDir)) {
-        fs.rmSync(scratchDir, { recursive: true, force: true });
-      }
-    } catch (e) {
-      // Ignored
-    }
   }
 }
 
@@ -296,6 +317,12 @@ run();
       exec("docker info", { timeout: 2000 }, (dockerCheckErr) => {
         if (dockerCheckErr) {
           logger.warn("Docker daemon is not running or responsive. Isolated container migration skipped. Falling back to host execution.");
+          try {
+            if (fs.existsSync(scratchDir)) {
+              fs.rmSync(scratchDir, { recursive: true, force: true });
+            }
+          } catch (e) {}
+
           resolve({
             success: false,
             stage: "isolated-migration",
@@ -327,6 +354,12 @@ run();
             zipBuffer = fs.readFileSync(outputZipPath);
           }
 
+          try {
+            if (fs.existsSync(scratchDir)) {
+              fs.rmSync(scratchDir, { recursive: true, force: true });
+            }
+          } catch (e) {}
+
           resolve({
             success: !runErr,
             stage: "isolated-migration",
@@ -338,19 +371,16 @@ run();
       });
     });
   } catch (error: any) {
+    try {
+      if (fs.existsSync(scratchDir)) {
+        fs.rmSync(scratchDir, { recursive: true, force: true });
+      }
+    } catch (e) {}
+
     return {
       success: false,
       stage: "isolated-migration",
       errors: [error.message],
     };
-  } finally {
-    // Cleanup temporary scratch folder
-    try {
-      if (fs.existsSync(scratchDir)) {
-        fs.rmSync(scratchDir, { recursive: true, force: true });
-      }
-    } catch (e) {
-      // Ignored
-    }
   }
 }

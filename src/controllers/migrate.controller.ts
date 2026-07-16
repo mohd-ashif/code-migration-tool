@@ -82,7 +82,9 @@ export async function handleMigrate(req: Request, res: Response, next: NextFunct
       });
     }
 
-    const job = enqueueMigrationJob({ projectFiles, targetFramework, sourceFramework: source });
+    const workspaceId = (req as any).workspaceId;
+    const userId = (req as any).userId;
+    const job = enqueueMigrationJob({ projectFiles, targetFramework, sourceFramework: source }, workspaceId, userId);
     res.status(202).json({ success: true, jobId: job.id, status: job.status, sourceFramework: providedSource ?? source });
   } catch (error) {
     next(error);
