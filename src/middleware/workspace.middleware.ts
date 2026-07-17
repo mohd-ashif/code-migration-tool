@@ -9,6 +9,18 @@ const authService = new AuthService();
 const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 const SYSTEM_WORKSPACE_ID = "00000000-0000-0000-0000-000000000001";
 
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  const list: Record<string, string> = {};
+  if (!cookieHeader) return list;
+  cookieHeader.split(";").forEach((cookie) => {
+    const parts = cookie.split("=");
+    const key = parts[0].trim();
+    const val = parts.slice(1).join("=");
+    list[key] = val;
+  });
+  return list;
+}
+
 export async function workspaceMiddleware(req: any, res: Response, next: NextFunction) {
   // If the path is public auth (except profile fetch and logout), skip workspace logic
   if (req.path.startsWith("/api/auth") && !req.path.endsWith("/me") && !req.path.endsWith("/logout")) {
@@ -24,8 +36,9 @@ export async function workspaceMiddleware(req: any, res: Response, next: NextFun
   }
 
   // 2. Extract access token from cookies if available
-  if (!token && req.cookies) {
-    token = req.cookies.access_token;
+  if (!token) {
+    const cookies = req.cookies || parseCookies(req.headers.cookie);
+    token = cookies.access_token;
   }
 
   if (token) {

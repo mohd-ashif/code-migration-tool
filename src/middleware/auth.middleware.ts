@@ -3,7 +3,13 @@ import { config } from "../config";
 import { logger } from "../utils/logger";
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (req.path.startsWith("/api/auth") || req.originalUrl.startsWith("/api/auth")) {
+  // Bypass static API key check for auth routes and downloads
+  if (
+    req.path.startsWith("/api/auth") ||
+    req.originalUrl.startsWith("/api/auth") ||
+    req.path.startsWith("/api/download") ||
+    req.originalUrl.startsWith("/api/download")
+  ) {
     return next();
   }
 

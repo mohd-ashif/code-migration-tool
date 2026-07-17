@@ -1,10 +1,17 @@
 import { v4 as uuidv4 } from "uuid";
+import { createHash } from "crypto";
+import * as path from "path";
+import * as fs from "fs";
 import { MigrationRequest, MigrationResult } from "../types/migration.types";
 import { enqueueMigration, migrationQueue } from "../queues/migration.queue";
 import { activeJobs } from "../queues/workers/migration.worker";
 import { queryDatabase, dbPool } from "../lib/database";
 import { logger } from "../utils/logger";
 import { config } from "../config";
+import { createArchive } from "./zip.service";
+import { MigrationRepository } from "../repositories/MigrationRepository";
+import { UploadRepository } from "../repositories/UploadRepository";
+import { MigrationReportService } from "./MigrationReportService";
 
 export interface JobRecord {
   id: string;
@@ -20,10 +27,64 @@ const jobStore = new Map<string, JobRecord>();
 export async function persistJobToDb(id: string, request: MigrationRequest, workspaceId?: string, userId?: string) {
   if (!dbPool) return;
   try {
-    await queryDatabase(
-      "INSERT INTO migration_jobs (id, status, request, progress, workspace_id, user_id) VALUES ($1::uuid, $2::varchar, $3::jsonb, $4::integer, $5::uuid, $6::uuid) ON CONFLICT (id) DO NOTHING",
-      [id, "pending", JSON.stringify(request), 0, workspaceId ?? null, userId ?? null]
-    );
+    // 1. Calculate project name and size
+    let projectName = `Project_${request.sourceFramework || "unknown"}_to_${request.targetFramework}`;
+    let projectSize = 0;
+
+    const files = request.projectFiles || [];
+    for (const f of files) {
+      projectSize += Buffer.byteLength(f.content, "utf8");
+      if (f.path === "package.json") {
+        try {
+          const pkg = JSON.parse(f.content);
+          if (pkg.name) {
+            projectName = pkg.name;
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+
+    const migrationRepo = new MigrationRepository();
+    await migrationRepo.create({
+      id,
+      status: "pending",
+      request,
+      progress: 0,
+      workspaceId: workspaceId || "00000000-0000-0000-0000-000000000001",
+      userId: userId || "00000000-0000-0000-0000-000000000000",
+      projectName,
+      projectSize,
+      sourceFramework: request.sourceFramework,
+      targetFramework: request.targetFramework,
+    });
+
+    // 2. Pack files and save to scratch uploads
+    const archiveBuffer = await createArchive(files);
+    const uploadsDir = path.join(__dirname, "..", "..", "scratch", "uploads");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const relativePath = path.join("scratch", "uploads", `project-${id}.zip`);
+    const storagePath = path.join(__dirname, "..", "..", relativePath);
+    fs.writeFileSync(storagePath, archiveBuffer);
+
+    // Compute checksum
+    const checksum = createHash("sha256").update(archiveBuffer).digest("hex");
+
+    // Insert into uploaded_projects
+    const uploadRepo = new UploadRepository();
+    await uploadRepo.create({
+      workspaceId: workspaceId || "00000000-0000-0000-0000-000000000001",
+      userId: userId || "00000000-0000-0000-0000-000000000000",
+      jobId: id,
+      originalFilename: `${projectName}.zip`,
+      storagePath: relativePath,
+      size: projectSize,
+      checksum,
+    });
+
   } catch (err) {
     logger.error(`Failed to persist job ${id}: ${err}`);
   }
@@ -83,10 +144,11 @@ export async function updateJobProgress(jobId: string, progress: number) {
 
   if (!dbPool) return;
   try {
-    await queryDatabase(
-      "UPDATE migration_jobs SET status = 'processing'::varchar, progress = $1::integer, updated_at = NOW() WHERE id = $2::uuid AND status NOT IN ('completed'::varchar, 'failed'::varchar)",
-      [progress, jobId]
-    );
+    const migrationRepo = new MigrationRepository();
+    await migrationRepo.update(jobId, {
+      status: "processing",
+      progress,
+    });
   } catch (err) {
     logger.error(`Failed to update job ${jobId} progress to ${progress}%: ${err}`);
   }
@@ -97,10 +159,19 @@ export async function markJobCompleted(jobId: string, result: MigrationResult) {
   jobStore.set(jobId, { id: jobId, status: "completed", progress: 100, result, message: null, request: originalJob?.request });
   if (!dbPool) return;
   try {
-    await queryDatabase(
-      "UPDATE migration_jobs SET status = $1::varchar, result = $2::jsonb, progress = 100, updated_at = NOW() WHERE id = $3::uuid",
-      ["completed", JSON.stringify(result), jobId]
-    );
+    const migrationRepo = new MigrationRepository();
+    const updatedJob = await migrationRepo.update(jobId, {
+      status: "completed",
+      result,
+      progress: 100,
+      completedAt: new Date(),
+    });
+
+    if (updatedJob && updatedJob.user_id && updatedJob.workspace_id) {
+      const reportService = new MigrationReportService();
+      await reportService.generateAndStoreReport(jobId, updatedJob.user_id, updatedJob.workspace_id);
+      logger.info(`Automatically generated report for completed job ${jobId}`);
+    }
   } catch (err) {
     logger.error(`Failed to update job ${jobId} as completed: ${err}`);
   }
@@ -111,10 +182,12 @@ export async function markJobFailed(jobId: string, message?: string) {
   jobStore.set(jobId, { id: jobId, status: "failed", result: null, message: message ?? null, request: originalJob?.request });
   if (!dbPool) return;
   try {
-    await queryDatabase(
-      "UPDATE migration_jobs SET status = $1::varchar, message = $2::text, updated_at = NOW() WHERE id = $3::uuid",
-      ["failed", message ?? null, jobId]
-    );
+    const migrationRepo = new MigrationRepository();
+    await migrationRepo.update(jobId, {
+      status: "failed",
+      message: message ?? null,
+      completedAt: new Date(),
+    });
   } catch (err) {
     logger.error(`Failed to update job ${jobId} as failed: ${err}`);
   }
@@ -127,8 +200,8 @@ export async function getJobResult(jobId: string, workspaceId?: string): Promise
   if (dbPool) {
     try {
       const queryStr = workspaceId
-        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid AND workspace_id = $2::uuid"
-        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid";
+        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid AND workspace_id = $2::uuid AND deleted_at IS NULL"
+        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid AND deleted_at IS NULL";
       const params = workspaceId ? [jobId, workspaceId] : [jobId];
       const rows = await queryDatabase(queryStr, params);
       if (rows && rows.length) {
@@ -182,8 +255,8 @@ export async function listJobs(workspaceId?: string): Promise<JobRecord[]> {
   if (dbPool) {
     try {
       const queryStr = workspaceId
-        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE workspace_id = $1::uuid ORDER BY created_at DESC LIMIT 50"
-        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs ORDER BY created_at DESC LIMIT 50";
+        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE workspace_id = $1::uuid AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50"
+        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 50";
       const params = workspaceId ? [workspaceId] : [];
       const rows = await queryDatabase(queryStr, params);
       if (rows) {

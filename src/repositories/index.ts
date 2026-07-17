@@ -4,3 +4,6 @@ export * from "./refresh-token.repository";
 export * from "./login-history.repository";
 export * from "./email-verification-token.repository";
 export * from "./password-reset-token.repository";
+export * from "./MigrationRepository";
+export * from "./ReportRepository";
+export * from "./UploadRepository";
