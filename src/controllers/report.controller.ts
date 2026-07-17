@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import { generateReport } from "../services/report.service";
+import { MigrationReportService } from "../services/MigrationReportService";
+
+const reportService = new MigrationReportService();
 
 export async function handleReport(req: Request, res: Response, next: NextFunction) {
   try {
@@ -7,7 +9,10 @@ export async function handleReport(req: Request, res: Response, next: NextFuncti
     if (!jobId) {
       return res.status(400).json({ success: false, message: "jobId is required." });
     }
-    const report = await generateReport({ jobId, summary });
+    const userId = (req as any).userId;
+    const workspaceId = (req as any).workspaceId;
+
+    const report = await reportService.generateAndStoreReport(jobId, userId, workspaceId, summary);
     res.status(200).json({ success: true, report });
   } catch (error) {
     next(error);

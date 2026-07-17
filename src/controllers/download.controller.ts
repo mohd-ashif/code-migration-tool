@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import { createArchive } from "../services/zip.service";
-import { getJobResult } from "../services/job.service";
+import { DownloadService } from "../services/DownloadService";
+
+const downloadService = new DownloadService();
 
 export async function handleDownload(req: Request, res: Response, next: NextFunction) {
   try {
@@ -9,16 +10,14 @@ export async function handleDownload(req: Request, res: Response, next: NextFunc
       return res.status(400).json({ success: false, message: "Missing jobId query parameter." });
     }
 
-    const jobResult = await getJobResult(jobId);
-    if (!jobResult || !jobResult.result) {
-      return res.status(404).json({ success: false, message: "Job result not found." });
-    }
+    const userId = (req as any).userId;
+    const workspaceId = (req as any).workspaceId;
 
-    const files = (jobResult.result.migratedFiles || []).filter(f => f.path !== ".migration_metadata.json");
-    const archiveBuffer = await createArchive(files);
+    const { buffer, filename } = await downloadService.getDownloadArchive(jobId, userId, workspaceId);
+
     res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename=migration-${jobId}.zip`);
-    res.send(archiveBuffer);
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    res.send(buffer);
   } catch (error) {
     next(error);
   }

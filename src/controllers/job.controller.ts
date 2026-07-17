@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { getJobResult, listJobs, cancelJob } from "../services/job.service";
+import { MigrationRepository } from "../repositories/MigrationRepository";
 
 export async function handleJobStatus(req: Request, res: Response, next: NextFunction) {
   try {
@@ -10,6 +11,19 @@ export async function handleJobStatus(req: Request, res: Response, next: NextFun
       return res.status(404).json({ success: false, message: "Job not found." });
     }
     res.json({ success: true, job });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const migrationRepo = new MigrationRepository();
+
+export async function handleGetRecentJobs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    const workspaceId = (req as any).workspaceId;
+    const jobs = await migrationRepo.getRecentJobs(userId, workspaceId, 10);
+    res.json({ success: true, jobs });
   } catch (error) {
     next(error);
   }
@@ -38,3 +52,4 @@ export async function handleCancelJob(req: Request, res: Response, next: NextFun
     next(error);
   }
 }
+

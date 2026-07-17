@@ -10,6 +10,9 @@ import jobsRoutes from "./routes/jobs.routes";
 import graphRoutes from "./routes/graph.routes";
 import authRoutes from "./routes/auth.routes";
 import workspaceRoutes from "./routes/workspace.routes";
+import historyRoutes from "./routes/history.routes";
+import reportsRoutes from "./routes/reports.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 import "./services/mail.service";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
@@ -49,6 +52,9 @@ app.use("/api/jobs", jobsRoutes);
 app.use("/api/graph", graphRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/workspace", workspaceRoutes);
+app.use("/api/history", historyRoutes);
+app.use("/api/reports", reportsRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/api/sample", (_req, res) => {
   const path = require("path");
