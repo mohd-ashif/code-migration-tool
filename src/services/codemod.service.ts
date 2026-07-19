@@ -1,5 +1,13 @@
 import { ParsedFile } from "../types/parser.types";
 import { SourceFramework, TargetFramework } from "../types/migration.types";
+import { queryDatabase } from "../lib/database";
+
+function normalizeSlug(framework: string): string {
+  const fw = framework.toLowerCase().trim();
+  if (fw === "next") return "nextjs";
+  if (fw === "solid") return "solidjs";
+  return fw;
+}
 import { transformAngularToReact } from "../codemods/angular/angular-class-to-function";
 import { transformVueSFCToJSX } from "../codemods/vue/vue-sfc-to-jsx";
 import { transformJSToTS, transformTSToJS } from "../codemods/javascript/js-to-ts";
@@ -71,6 +79,24 @@ export async function runCodemod(
   checkAbort();
   onProgress?.(5);
 
+  // Load active codemods for target framework
+  const slug = normalizeSlug(targetFramework);
+  const codemodRows = await queryDatabase(
+    `SELECT c.name, c.enabled FROM codemods c
+     JOIN frameworks f ON f.id = c.framework_id
+     WHERE f.slug = $1`,
+    [slug]
+  );
+
+  const enabledCodemods = new Set<string>();
+  if (codemodRows && codemodRows.length > 0) {
+    codemodRows.forEach((row) => {
+      if (row.enabled) {
+        enabledCodemods.add(row.name);
+      }
+    });
+  }
+
   let migrated: ParsedFile[] = [];
 
   // Project-wide conversions
@@ -89,9 +115,9 @@ export async function runCodemod(
   } else if (sourceFramework === "next" && targetFramework === "typescript") {
     migrated = await migrateNextToReact(projectFiles, true);
   } else if (sourceFramework === "react" && targetFramework === "next") {
-    migrated = await migrateReactToNext(projectFiles);
+    migrated = await migrateReactToNext(projectFiles, enabledCodemods);
   } else if (sourceFramework === "typescript" && targetFramework === "next") {
-    migrated = await migrateReactToNext(projectFiles);
+    migrated = await migrateReactToNext(projectFiles, enabledCodemods);
   } else if (sourceFramework === "react" && targetFramework === "svelte") {
     migrated = migrateReactProject(projectFiles);
   } else if (sourceFramework === "typescript" && targetFramework === "svelte") {
@@ -110,12 +136,12 @@ export async function runCodemod(
         content = transformVueSFCToJSX(content);
       } else if (sourceFramework === "vue" && targetFramework === "typescript") {
         content = transformVueSFCToJSX(content);
-        const res = transformJSToTS(content, path);
+        const res = transformJSToTS(content, path, enabledCodemods);
         content = res.content;
         path = res.path;
       } else if (sourceFramework === "vue" && targetFramework === "next") {
         content = transformVueSFCToJSX(content);
-        const res = transformJSToTS(content, path);
+        const res = transformJSToTS(content, path, enabledCodemods);
         content = res.content;
         path = res.path;
       } else if (sourceFramework === "svelte" && (targetFramework === "react" || targetFramework === "typescript")) {
@@ -127,11 +153,11 @@ export async function runCodemod(
         content = res.content;
         path = res.path;
       } else if (sourceFramework === "javascript" && targetFramework === "typescript") {
-        const result = transformJSToTS(content, path);
+        const result = transformJSToTS(content, path, enabledCodemods);
         content = result.content;
         path = result.path;
       } else if (sourceFramework === "react" && targetFramework === "typescript") {
-        const result = transformJSToTS(content, path);
+        const result = transformJSToTS(content, path, enabledCodemods);
         content = result.content;
         path = result.path;
       } else if (sourceFramework === "react" && targetFramework === "vue") {

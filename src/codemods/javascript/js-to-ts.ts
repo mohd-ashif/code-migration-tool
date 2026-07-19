@@ -1,20 +1,23 @@
-export function transformJSToTS(source: string, filePath: string): { content: string; path: string } {
+export function transformJSToTS(source: string, filePath: string, enabledCodemods?: Set<string>): { content: string; path: string } {
   const isJSX = filePath.endsWith(".jsx") || /<\s*[A-Za-z][^>]*>/.test(source);
   if (isJSX) {
-    return transformJSXToTSX(source, filePath);
+    return transformJSXToTSX(source, filePath, enabledCodemods);
   }
 
   const path = filePath.endsWith(".js") ? filePath.replace(/\.js$/, ".ts") : filePath;
   return { content: source, path };
 }
 
-export function transformJSXToTSX(source: string, filePath: string): { content: string; path: string } {
+export function transformJSXToTSX(source: string, filePath: string, enabledCodemods?: Set<string>): { content: string; path: string } {
   let content = source;
   
-  // Convert standard React function components to use typed parameters where needed
-  content = content.replace(/const\s+([A-Za-z_$][\w$]*)\s*=\s*\(\s*props\s*\)\s*=>\s*/g, "const $1 = (props: any) => ");
-  content = content.replace(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)\s*\(\s*props\s*\)/g, "export default function $1(props: any)");
-  content = content.replace(/function\s+([A-Za-z_$][\w$]*)\s*\(\s*props\s*\)/g, "function $1(props: any)");
+  const runTypeInference = !enabledCodemods || enabledCodemods.has("type-inference");
+  if (runTypeInference) {
+    // Convert standard React function components to use typed parameters where needed
+    content = content.replace(/const\s+([A-Za-z_$][\w$]*)\s*=\s*\(\s*props\s*\)\s*=>\s*/g, "const $1 = (props: any) => ");
+    content = content.replace(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)\s*\(\s*props\s*\)/g, "export default function $1(props: any)");
+    content = content.replace(/function\s+([A-Za-z_$][\w$]*)\s*\(\s*props\s*\)/g, "function $1(props: any)");
+  }
 
   const path = filePath.replace(/\.jsx?$/, ".tsx");
   return { content, path };

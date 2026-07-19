@@ -13,6 +13,7 @@ import workspaceRoutes from "./routes/workspace.routes";
 import historyRoutes from "./routes/history.routes";
 import reportsRoutes from "./routes/reports.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import frameworkRoutes from "./routes/framework.routes";
 import "./services/mail.service";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
@@ -55,6 +56,7 @@ app.use("/api/workspace", workspaceRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api", frameworkRoutes);
 
 app.get("/api/sample", (_req, res) => {
   const path = require("path");
