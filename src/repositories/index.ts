@@ -7,3 +7,6 @@ export * from "./password-reset-token.repository";
 export * from "./MigrationRepository";
 export * from "./ReportRepository";
 export * from "./UploadRepository";
+export * from "./FrameworkRepository";
+export * from "./EngineRepository";
+export * from "./CodemodRepository";

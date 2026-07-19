@@ -124,7 +124,7 @@ function verifyDependencies(files: ParsedFile[]): FileVerification[] {
   });
 }
 
-export async function migrateReactToNext(files: ParsedFile[]): Promise<ParsedFile[]> {
+export async function migrateReactToNext(files: ParsedFile[], enabledCodemods?: Set<string>): Promise<ParsedFile[]> {
   const resultFiles: ParsedFile[] = [];
   
   // 1. Run Complete Project Dependency Analysis first
@@ -232,10 +232,14 @@ export async function migrateReactToNext(files: ParsedFile[]): Promise<ParsedFil
 
     // Convert React Router to Next.js Router
     if (path.endsWith(".tsx") || path.endsWith(".jsx") || path.endsWith(".ts") || path.endsWith(".js")) {
-      content = transformReactRouterImportsAndHooks(content, path);
+      const runRouterTransform = !enabledCodemods || enabledCodemods.has("pages-to-app-router");
+      if (runRouterTransform) {
+        content = transformReactRouterImportsAndHooks(content, path);
+      }
       
       // Inject "use client" if it uses client hooks or state
-      if (checkRequiresClientDirective(content, path) && !content.trim().startsWith('"use client"') && !content.trim().startsWith("'use client'")) {
+      const runClientDirective = !enabledCodemods || enabledCodemods.has("use-client-directive");
+      if (runClientDirective && checkRequiresClientDirective(content, path) && !content.trim().startsWith('"use client"') && !content.trim().startsWith("'use client'")) {
         content = `"use client";\n\n${content}`;
       }
     }
@@ -244,7 +248,8 @@ export async function migrateReactToNext(files: ParsedFile[]): Promise<ParsedFil
   });
 
   // 6. Handle App routing and entry points
-  if (routes.length > 0) {
+  const runRouting = !enabledCodemods || enabledCodemods.has("pages-to-app-router");
+  if (runRouting && routes.length > 0) {
     routes.forEach(route => {
       let pagePath = "";
       let depth = 1;
