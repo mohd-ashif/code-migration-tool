@@ -9,18 +9,21 @@ import downloadRoutes from "./routes/download.routes";
 import jobsRoutes from "./routes/jobs.routes";
 import graphRoutes from "./routes/graph.routes";
 import authRoutes from "./routes/auth.routes";
+import userRoutes from "./routes/user.routes";
 import workspaceRoutes from "./routes/workspace.routes";
 import historyRoutes from "./routes/history.routes";
 import reportsRoutes from "./routes/reports.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import frameworkRoutes from "./routes/framework.routes";
+import billingRoutes from "./routes/billing.routes";
+import webhookRoutes from "./routes/webhook.routes";
 import "./services/mail.service";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
 import { workspaceMiddleware } from "./middleware/workspace.middleware";
 import { errorHandler } from "./middleware/error.middleware";
 import { connectRedis } from "./lib/redis";
-import { initializeDatabase } from "./lib/database";
+import { initializeDatabase, queryDatabase } from "./lib/database";
 import { config, validateEnv } from "./config";
 import { logger } from "./utils/logger";
 // Start background workers
@@ -30,10 +33,35 @@ const app = express();
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ 
+  limit: "10mb",
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 app.use(rateLimitMiddleware);
+
+app.get("/api/check-db", async (req, res) => {
+  try {
+    const tables = await queryDatabase(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+    let plans = [];
+    try {
+      plans = await queryDatabase(`SELECT * FROM subscription_plans`);
+    } catch (e: any) {
+      plans = [{ error: e.message }];
+    }
+    res.json({ tables: tables.map((t: any) => t.table_name), plans });
+  } catch (err: any) {
+    res.json({ error: err.message });
+  }
+});
+
 app.use(authMiddleware);
 app.use(workspaceMiddleware);
 
@@ -41,7 +69,7 @@ app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     message: "Migration tool backend is running.",
-    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs", "/api/graph", "/api/auth"],
+    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs", "/api/graph", "/api/auth", "/api/billing"],
   });
 });
 
@@ -52,10 +80,13 @@ app.use("/api/download", downloadRoutes);
 app.use("/api/jobs", jobsRoutes);
 app.use("/api/graph", graphRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/billing", billingRoutes);
+app.use("/api/webhooks", webhookRoutes);
 app.use("/api", frameworkRoutes);
 
 app.get("/api/sample", (_req, res) => {
@@ -98,3 +129,7 @@ app.listen(port, async () => {
 });
 
 export default app;
+
+// Trigger watch reload v2: execute compatibility trigger database migrations
+
+

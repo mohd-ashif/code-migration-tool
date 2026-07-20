@@ -2,7 +2,7 @@ import { MigrationRepository } from "../repositories/MigrationRepository";
 import { ReportRepository } from "../repositories/ReportRepository";
 import { UploadRepository } from "../repositories/UploadRepository";
 import { queryDatabase } from "../lib/database";
-import { HttpError } from "./auth.service";
+import { HttpError } from "../middleware/error.middleware";
 
 export class DashboardService {
   private migrationRepo = new MigrationRepository();

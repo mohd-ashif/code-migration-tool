@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { AuthService, HttpError } from "../services/auth.service";
+import { AuthService } from "../services/auth.service";
+import { HttpError } from "../middleware/error.middleware";
 import {
   validateRegisterRequest,
   validateLoginRequest,
@@ -109,7 +110,9 @@ export async function handleRefresh(req: Request, res: Response, next: NextFunct
       return res.status(400).json({ success: false, message: "Refresh token is required." });
     }
 
-    const { user, accessToken, refreshToken: newRefreshToken } = await authService.refresh(token);
+    const ipAddress = req.ip || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+    const { user, accessToken, refreshToken: newRefreshToken } = await authService.refresh(token, ipAddress, userAgent);
 
     res.cookie("access_token", accessToken, {
       ...cookieOptions,
@@ -319,7 +322,9 @@ export async function handleGoogleCallback(req: Request, res: Response, next: Ne
     }
 
     // 3. Process account linking/creation in auth service
-    const { user, accessToken, refreshToken } = await authService.handleGoogleCallback(email, sub);
+    const ipAddress = req.ip || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+    const { user, accessToken, refreshToken } = await authService.handleGoogleCallback(email, sub, ipAddress, userAgent);
 
     // 4. Set HTTP-only cookies
     res.cookie("access_token", accessToken, {
@@ -434,7 +439,9 @@ export async function handleGithubCallback(req: Request, res: Response, next: Ne
     }
 
     // 4. Process linking/creation in auth service
-    const { user, accessToken, refreshToken } = await authService.handleGithubCallback(email, githubId);
+    const ipAddress = req.ip || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+    const { user, accessToken, refreshToken } = await authService.handleGithubCallback(email, githubId, ipAddress, userAgent);
 
     // 5. Set HTTP-only cookies
     res.cookie("access_token", accessToken, {
@@ -449,6 +456,60 @@ export async function handleGithubCallback(req: Request, res: Response, next: Ne
 
     // 6. Redirect back to frontend homepage
     res.redirect("http://localhost:3000/");
+  } catch (error) {
+    handleError(error, res, next);
+  }
+}
+
+export async function handleSendMagicLink(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    const ipAddress = req.ip || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+
+    await authService.sendMagicLink(email, ipAddress, userAgent);
+
+    res.status(200).json({
+      success: true,
+      message: "A magic login link has been sent to your email address.",
+    });
+  } catch (error) {
+    handleError(error, res, next);
+  }
+}
+
+export async function handleVerifyMagicLink(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Magic link token is required." });
+    }
+
+    const ipAddress = req.ip || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+
+    const { user, accessToken, refreshToken } = await authService.verifyMagicLink(token, ipAddress, userAgent);
+
+    // Set HTTP-only cookies
+    res.cookie("access_token", accessToken, {
+      ...cookieOptions,
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie("refresh_token", refreshToken, {
+      ...cookieOptions,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful.",
+      data: { user, accessToken },
+    });
   } catch (error) {
     handleError(error, res, next);
   }

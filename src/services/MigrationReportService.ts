@@ -3,7 +3,7 @@ import * as fs from "fs";
 import { generateSimplePdf } from "../utils/pdf";
 import { ReportRepository } from "../repositories/ReportRepository";
 import { MigrationRepository } from "../repositories/MigrationRepository";
-import { HttpError } from "./auth.service";
+import { HttpError } from "../middleware/error.middleware";
 import { SemanticGraphBuilder } from "../analyzer/semantic-graph-builder";
 import { GraphAnalyzer } from "./graph-analyzer";
 

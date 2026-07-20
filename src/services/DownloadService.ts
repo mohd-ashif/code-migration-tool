@@ -1,6 +1,6 @@
 import { MigrationRepository } from "../repositories/MigrationRepository";
 import { createArchive } from "./zip.service";
-import { HttpError } from "./auth.service";
+import { HttpError } from "../middleware/error.middleware";
 
 export class DownloadService {
   private migrationRepo = new MigrationRepository();

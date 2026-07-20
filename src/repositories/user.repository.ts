@@ -8,6 +8,10 @@ export function mapRowToUser(row: any): User {
     email: row.email,
     passwordHash: row.password_hash,
     isEmailVerified: row.is_email_verified,
+    fullName: row.full_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    company: row.company,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
@@ -38,17 +42,25 @@ export class UserRepository {
     email: string;
     passwordHash?: string | null;
     isEmailVerified?: boolean;
+    fullName?: string | null;
+    avatarUrl?: string | null;
+    bio?: string | null;
+    company?: string | null;
   }): Promise<User> {
     const isEmailVerified = data.isEmailVerified ?? false;
     const query = `
-      INSERT INTO users (email, password_hash, is_email_verified)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (email, password_hash, is_email_verified, full_name, avatar_url, bio, company)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
     const rows = await queryDatabase(query, [
       data.email.trim(),
       data.passwordHash ?? null,
       isEmailVerified,
+      data.fullName ?? null,
+      data.avatarUrl ?? null,
+      data.bio ?? null,
+      data.company ?? null,
     ]);
     return mapRowToUser(rows[0]);
   }
@@ -60,6 +72,10 @@ export class UserRepository {
       email: string;
       passwordHash: string | null;
       isEmailVerified: boolean;
+      fullName: string | null;
+      avatarUrl: string | null;
+      bio: string | null;
+      company: string | null;
       deletedAt: Date | null;
     }>
   ): Promise<User | null> {
@@ -79,6 +95,22 @@ export class UserRepository {
     if (updates.isEmailVerified !== undefined) {
       fields.push(`is_email_verified = $${placeholderIndex++}`);
       values.push(updates.isEmailVerified);
+    }
+    if (updates.fullName !== undefined) {
+      fields.push(`full_name = $${placeholderIndex++}`);
+      values.push(updates.fullName);
+    }
+    if (updates.avatarUrl !== undefined) {
+      fields.push(`avatar_url = $${placeholderIndex++}`);
+      values.push(updates.avatarUrl);
+    }
+    if (updates.bio !== undefined) {
+      fields.push(`bio = $${placeholderIndex++}`);
+      values.push(updates.bio);
+    }
+    if (updates.company !== undefined) {
+      fields.push(`company = $${placeholderIndex++}`);
+      values.push(updates.company);
     }
     if (updates.deletedAt !== undefined) {
       fields.push(`deleted_at = $${placeholderIndex++}`);

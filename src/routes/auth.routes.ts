@@ -12,6 +12,8 @@ import {
   handleGetMe,
   handleGithubRedirect,
   handleGithubCallback,
+  handleSendMagicLink,
+  handleVerifyMagicLink,
 } from "../controllers/auth.controller";
 import { jwtAuthMiddleware } from "../middleware/jwt-auth.middleware";
 import { createAuthRateLimiter } from "../middleware/rate-limit-auth.middleware";
@@ -41,6 +43,8 @@ router.post("/logout", jwtAuthMiddleware, handleLogout);
 router.get("/verify-email", handleVerifyEmail);
 router.post("/forgot-password", resetRequestLimiter, handleForgotPassword);
 router.post("/reset-password", resetRequestLimiter, handleResetPassword);
+router.post("/magic-link", loginLimiter, handleSendMagicLink);
+router.post("/magic-link/verify", loginLimiter, handleVerifyMagicLink);
 router.get("/me", jwtAuthMiddleware, handleGetMe);
 
 export default router;

@@ -1,13 +1,14 @@
 import nodemailer from "nodemailer";
 import { logger } from "../utils/logger";
+import { config } from "../config";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp-relay.brevo.com",
-  port: Number(process.env.SMTP_PORT || 587),
+  host: config.SMTP_HOST || "smtp-relay.brevo.com",
+  port: Number(config.SMTP_PORT || 587),
   secure: false, // true for port 465, false for other ports like 587
   auth: {
-    user: process.env.SMTP_USER || "mohdaszif077@gmail.com",
-    pass: process.env.SMTP_PASS,
+    user: config.SMTP_USER || "mohdaszif077@gmail.com",
+    pass: config.SMTP_PASS,
   },
 });
 
@@ -29,7 +30,7 @@ interface SendEmailParams {
 
 export async function sendEmail({ to, subject, html, text }: SendEmailParams): Promise<void> {
   const mailOptions = {
-    from: process.env.SMTP_FROM || process.env.SMTP_USER || "mohdaszif077@gmail.com",
+    from: config.SMTP_FROM || config.SMTP_USER || "mohdaszif077@gmail.com",
     to,
     subject,
     html,
@@ -44,3 +45,4 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
     throw new Error(`Email delivery failed: ${error.message}`);
   }
 }
+
