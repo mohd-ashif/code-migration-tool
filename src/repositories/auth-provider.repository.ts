@@ -76,6 +76,17 @@ export class AuthProviderRepository {
     return rows.length > 0;
   }
 
+  async deleteByProviderAndUser(userId: string, providerName: string): Promise<boolean> {
+    const query = `
+      UPDATE auth_providers
+      SET deleted_at = NOW()
+      WHERE user_id = $1::uuid AND provider_name = $2 AND deleted_at IS NULL
+      RETURNING id
+    `;
+    const rows = await queryDatabase(query, [userId, providerName]);
+    return rows.length > 0;
+  }
+
 
   async deleteHard(id: string): Promise<boolean> {
     const query = "DELETE FROM auth_providers WHERE id = $1::uuid RETURNING id";

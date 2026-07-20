@@ -3,6 +3,10 @@ import { enqueueMigrationJob } from "../services/job.service";
 import { detectFramework } from "../utils/detectFramework";
 import { isSupportedMigrationPair, supportedMigrationPairs } from "../services/codemod.service";
 import { SourceFramework, TargetFramework } from "../types/migration.types";
+import { usageRepository } from "../repositories/usage.repository";
+import { resolveWorkspacePlan, getBillingPeriod } from "../middleware/billing.middleware";
+import { subscriptionPlanRepository } from "../repositories/subscription-plan.repository";
+import { logger } from "../utils/logger";
 
 const targetFrameworks: TargetFramework[] = ["react", "next", "typescript", "vue", "svelte", "nuxt", "solid", "qwik"];
 
@@ -85,6 +89,27 @@ export async function handleMigrate(req: Request, res: Response, next: NextFunct
     const workspaceId = (req as any).workspaceId;
     const userId = (req as any).userId;
     const job = enqueueMigrationJob({ projectFiles, targetFramework, sourceFramework: source }, workspaceId, userId);
+    
+    // Increment Monthly Migrations Count
+    try {
+      const { planId, subscription } = await resolveWorkspacePlan(workspaceId);
+      const features = await subscriptionPlanRepository.findPlanFeatures(planId);
+      const limitVal = features.find(f => f.featureKey === "migrations_limit")?.featureValue || "5";
+      const limit = parseInt(limitVal, 10);
+      const billingPeriod = getBillingPeriod(subscription);
+      
+      await usageRepository.incrementUsage(
+        workspaceId,
+        "migrations",
+        1,
+        limit === -1 ? null : limit,
+        billingPeriod.start,
+        billingPeriod.end
+      );
+    } catch (err: any) {
+      logger.error(`Failed to increment migration count: ${err.message}`);
+    }
+
     res.status(202).json({ success: true, jobId: job.id, status: job.status, sourceFramework: providedSource ?? source });
   } catch (error) {
     next(error);

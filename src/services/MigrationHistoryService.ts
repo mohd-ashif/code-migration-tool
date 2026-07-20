@@ -1,6 +1,6 @@
 import { MigrationRepository } from "../repositories/MigrationRepository";
 import { enqueueMigrationJob } from "./job.service";
-import { HttpError } from "./auth.service";
+import { HttpError } from "../middleware/error.middleware";
 
 export class MigrationHistoryService {
   private migrationRepo = new MigrationRepository();

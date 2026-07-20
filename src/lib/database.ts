@@ -54,8 +54,8 @@ export async function initializeDatabase() {
 
     // 4. Ensure System Workspace (ending in 1 UUID)
     await queryDatabase(
-      `INSERT INTO workspaces (id, name, owner_id) 
-       VALUES ('00000000-0000-0000-0000-000000000001'::uuid, 'System Workspace', '00000000-0000-0000-0000-000000000000'::uuid)
+      `INSERT INTO workspaces (id, name, owner_id, slug) 
+       VALUES ('00000000-0000-0000-0000-000000000001'::uuid, 'System Workspace', '00000000-0000-0000-0000-000000000000'::uuid, 'system-workspace')
        ON CONFLICT (id) DO NOTHING`
     );
 

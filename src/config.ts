@@ -27,6 +27,9 @@ export interface AppConfig {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   GITHUB_REDIRECT_URI: string;
+  RAZORPAY_KEY_ID: string;
+  RAZORPAY_KEY_SECRET: string;
+  RAZORPAY_WEBHOOK_SECRET: string;
 }
 
 export const config: AppConfig = {
@@ -51,6 +54,9 @@ export const config: AppConfig = {
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID?.trim() || "default-github-client-id",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET?.trim() || "default-github-client-secret",
   GITHUB_REDIRECT_URI: process.env.GITHUB_REDIRECT_URI?.trim() || "http://localhost:4000/api/auth/github/callback",
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID?.trim() || "",
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET?.trim() || "",
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "",
 };
 
 export function validateEnv() {

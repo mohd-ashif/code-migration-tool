@@ -1,4 +1,5 @@
-import { AuthService, HttpError } from "../auth.service";
+import { AuthService } from "../auth.service";
+import { HttpError } from "../../middleware/error.middleware";
 import { UserRepository } from "../../repositories/user.repository";
 import { RefreshTokenRepository } from "../../repositories/refresh-token.repository";
 import { EmailVerificationTokenRepository } from "../../repositories/email-verification-token.repository";

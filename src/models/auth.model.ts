@@ -3,6 +3,10 @@ export interface User {
   email: string;
   passwordHash?: string | null;
   isEmailVerified: boolean;
+  fullName?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  company?: string | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -24,6 +28,8 @@ export interface RefreshToken {
   token: string;
   expiresAt: Date;
   isRevoked: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -62,3 +68,28 @@ export interface PasswordResetToken {
   updatedAt: Date;
   deletedAt?: Date | null;
 }
+
+export interface UserActivity {
+  id: string;
+  userId: string;
+  action: string;
+  metadata?: any | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: Date;
+}
+
+export interface ApiKey {
+  id: string;
+  userId: string;
+  name: string;
+  keyHash: string;
+  prefix: string;
+  expiresAt?: Date | null;
+  lastUsedAt?: Date | null;
+  workspaceId?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
+}
+

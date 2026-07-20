@@ -4,6 +4,10 @@ export interface UserDto {
   id: string;
   email: string;
   isEmailVerified: boolean;
+  fullName?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  company?: string | null;
   createdAt: Date;
 }
 
