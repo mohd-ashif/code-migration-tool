@@ -1,0 +1,233 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI Code Migration Studio - SaaS Billing API",
+    "version": "1.0.0",
+    "description": "API documentation for the AI Code Migration Studio Billing & Subscription system with Razorpay integration and GST invoice support."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/api/billing/plans": {
+      "get": {
+        "summary": "Get all active subscription plans",
+        "description": "Retrieves subscription plans (Free, Pro, Team, Enterprise) along with features.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "plans": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/subscription": {
+      "get": {
+        "summary": "Get active workspace subscription details",
+        "description": "Retrieves the current plan, limits, renewal date, and billing address for the active workspace.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "subscription": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/usage": {
+      "get": {
+        "summary": "Get active workspace usage status",
+        "description": "Retrieve current consumption of migrations, storage, and AI requests versus limits.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/api/billing/checkout": {
+      "post": {
+        "summary": "Create Razorpay checkout session",
+        "description": "Returns Razorpay subscription initialization keys and payment config.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["planSlug", "billingCycle", "billingAddress"],
+                "properties": {
+                  "planSlug": { "type": "string", "example": "pro" },
+                  "billingCycle": { "type": "string", "enum": ["monthly", "yearly"], "example": "monthly" },
+                  "billingAddress": { "type": "object" },
+                  "couponCode": { "type": "string", "example": "WELCOME100" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Checkout session initialized" }
+        }
+      }
+    },
+    "/api/billing/verify": {
+      "post": {
+        "summary": "Verify payment and activate subscription",
+        "description": "Verifies checkout signatures from Razorpay and marks the workspace subscription active.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["paymentId", "signature", "subscriptionId"],
+                "properties": {
+                  "paymentId": { "type": "string" },
+                  "signature": { "type": "string" },
+                  "subscriptionId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment verified" }
+        }
+      }
+    },
+    "/api/billing/cancel": {
+      "post": {
+        "summary": "Cancel subscription at cycle end",
+        "description": "Schedules cancellation at the end of the current billing cycle.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Cancelled successfully" }
+        }
+      }
+    },
+    "/api/billing/resume": {
+      "post": {
+        "summary": "Resume cancelled pending subscription",
+        "description": "Resumes a subscription scheduled for cancellation before the cycle end.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Resumed successfully" }
+        }
+      }
+    },
+    "/api/billing/invoices": {
+      "get": {
+        "summary": "Get workspace invoices",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of invoices" }
+        }
+      }
+    },
+    "/api/billing/payments": {
+      "get": {
+        "summary": "Get workspace payment history",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of payments" }
+        }
+      }
+    },
+    "/api/billing/apply-coupon": {
+      "post": {
+        "summary": "Apply and check coupon validity",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code"],
+                "properties": {
+                  "code": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Coupon applied" }
+        }
+      }
+    },
+    "/api/webhooks/razorpay": {
+      "post": {
+        "summary": "Razorpay subscription webhook receiver",
+        "description": "Handles subscription charged, cancelled, and halted events. Validates signatures.",
+        "responses": {
+          "200": { "description": "Event processed" }
+        }
+      }
+    },
+    "/api/billing/admin/plans": {
+      "post": {
+        "summary": "Create subscription plan",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    },
+    "/api/billing/admin/payments/{id}/refund": {
+      "post": {
+        "summary": "Process payment refund",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Refund processed" }
+        }
+      }
+    },
+    "/api/billing/admin/revenue": {
+      "get": {
+        "summary": "Get system revenue metrics",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Revenue data" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

@@ -169,5 +169,18 @@ export class SubscriptionRepository {
       [subscriptionId, eventType, JSON.stringify(payload)]
     );
   }
+
+  async listAll(): Promise<any[]> {
+    const rows = await queryDatabase(
+      `SELECT s.id, s.workspace_id AS "workspaceId", w.name AS "workspaceName", 
+              s.plan_id AS "planId", p.name AS "planName", s.status, s.billing_cycle AS "billingCycle", 
+              s.starts_at AS "startsAt", s.expires_at AS "expiresAt", s.created_at AS "createdAt"
+       FROM subscriptions s
+       INNER JOIN workspaces w ON w.id = s.workspace_id
+       INNER JOIN subscription_plans p ON p.id = s.plan_id
+       ORDER BY s.created_at DESC`
+    );
+    return rows;
+  }
 }
 export const subscriptionRepository = new SubscriptionRepository();
