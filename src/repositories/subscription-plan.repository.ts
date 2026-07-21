@@ -91,5 +91,40 @@ export class SubscriptionPlanRepository {
     );
     return rows[0];
   }
+
+  async updatePlan(id: string, plan: Partial<SubscriptionPlan>): Promise<SubscriptionPlan> {
+    const rows = await queryDatabase(
+      `UPDATE subscription_plans 
+       SET name = COALESCE($1, name), 
+           description = COALESCE($2, description), 
+           monthly_price = COALESCE($3, monthly_price), 
+           yearly_price = COALESCE($4, yearly_price), 
+           display_order = COALESCE($5, display_order), 
+           is_active = COALESCE($6, is_active), 
+           is_public = COALESCE($7, is_public),
+           updated_at = NOW()
+       WHERE id = $8::uuid
+       RETURNING id, name, slug, description, monthly_price AS "monthlyPrice", yearly_price AS "yearlyPrice", 
+                 currency, trial_days AS "trialDays", display_order AS "displayOrder", is_public AS "isPublic", is_active AS "isActive"`,
+      [
+        plan.name,
+        plan.description,
+        plan.monthlyPrice,
+        plan.yearlyPrice,
+        plan.displayOrder,
+        plan.isActive,
+        plan.isPublic,
+        id
+      ]
+    );
+    return rows[0];
+  }
+
+  async disablePlan(id: string): Promise<void> {
+    await queryDatabase(
+      `UPDATE subscription_plans SET is_active = false, updated_at = NOW() WHERE id = $1::uuid`,
+      [id]
+    );
+  }
 }
 export const subscriptionPlanRepository = new SubscriptionPlanRepository();

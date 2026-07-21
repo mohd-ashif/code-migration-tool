@@ -60,7 +60,7 @@ export class UsageRepository {
   ): Promise<UsageTracking> {
     const rows = await queryDatabase(
       `INSERT INTO usage_tracking (workspace_id, metric, value, limit_value, billing_period_start, billing_period_end)
-       VALUES ($1::uuid, $2, 0, $4, $5, $6)
+       VALUES ($1::uuid, $2, 0, $3, $4, $5)
        ON CONFLICT (workspace_id, metric, billing_period_start, billing_period_end) 
        DO UPDATE SET value = 0, limit_value = EXCLUDED.limit_value, updated_at = NOW()
        RETURNING id, workspace_id AS "workspaceId", metric, value, limit_value AS "limitValue", 
@@ -68,6 +68,17 @@ export class UsageRepository {
       [workspaceId, metric, limitValue, periodStart, periodEnd]
     );
     return rows[0];
+  }
+
+  async listAllUsage(): Promise<any[]> {
+    const rows = await queryDatabase(
+      `SELECT u.id, u.workspace_id AS "workspaceId", w.name AS "workspaceName", u.metric, u.value, u.limit_value AS "limitValue",
+              u.billing_period_start AS "billingPeriodStart", u.billing_period_end AS "billingPeriodEnd", u.updated_at AS "updatedAt"
+       FROM usage_tracking u
+       INNER JOIN workspaces w ON w.id = u.workspace_id
+       ORDER BY u.updated_at DESC`
+    );
+    return rows;
   }
 }
 export const usageRepository = new UsageRepository();

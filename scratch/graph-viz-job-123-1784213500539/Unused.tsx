@@ -1,5 +1,5 @@
 
-          export function Unused() {
-            return <div>Unused</div>;
-          }
+export function unused() {
+  console.log('This is an unused function');
+}
         
