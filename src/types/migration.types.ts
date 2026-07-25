@@ -1,5 +1,6 @@
 import { ParsedFile } from "./parser.types";
 
+export type ProjectFile = ParsedFile;
 export type TargetFramework = "react" | "next" | "typescript" | "vue" | "svelte" | "nuxt" | "solid" | "qwik";
 export type SourceFramework = "angular" | "vue" | "react" | "javascript" | "typescript" | "next" | "svelte" | "nuxt" | "solid" | "qwik";
 
@@ -14,6 +15,8 @@ export interface MigrationResult {
   success: boolean;
   targetFramework: TargetFramework;
   migratedFiles: ParsedFile[];
+  warnings?: string[];
+  errors?: string[];
   metadata: {
     fileCount: number;
     origin: string;

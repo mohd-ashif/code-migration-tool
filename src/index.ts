@@ -78,8 +78,11 @@ app.get("/", (_req, res) => {
   });
 });
 
+import migrationsRoutes from "./routes/migrations.routes";
+
 app.use("/api/parse", parseRoutes);
 app.use("/api/migrate", migrateRoutes);
+app.use("/api/migrations", migrationsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/download", downloadRoutes);

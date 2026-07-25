@@ -1,11 +1,14 @@
 import { Worker } from "bullmq";
 import { queueConnection } from "../migration.queue";
 import { migrateProject } from "../../services/migration.service";
-import { markJobCompleted, markJobFailed } from "../../services/job.service";
+import { markJobCompleted, markJobFailed, updateJobProgress } from "../../services/job.service";
 import { logger } from "../../utils/logger";
+import { config } from "../../config";
+import { MigrationRepository } from "../../repositories/MigrationRepository";
 
 // Track active jobs to support cancellation
 export const activeJobs = new Map<string, AbortController>();
+const WORKER_ID = `worker_${process.pid}_${Math.random().toString(36).substring(2, 7)}`;
 
 export const migrationWorker = queueConnection
   ? new Worker(
@@ -17,16 +20,34 @@ export const migrationWorker = queueConnection
           throw new Error("Job ID is missing.");
         }
 
-        logger.info(`Starting migration worker job ${jobId}`);
+        logger.info(`Starting migration worker (${WORKER_ID}) for job ${jobId}`);
 
         const controller = new AbortController();
         activeJobs.set(jobId, controller);
 
         try {
+          const migrationRepo = new MigrationRepository();
+          await migrationRepo.update(jobId, {
+            workerId: WORKER_ID,
+            status: "MIGRATING" as any,
+            currentStage: "PARSING",
+            startedAt: new Date(),
+          });
+
+          await updateJobProgress(jobId, 10, "PARSING", undefined, undefined, "Parsing AST and dependencies...");
+
           const result = await migrateProject(
             request,
             async (progressPercent: number) => {
               await job.updateProgress(progressPercent);
+              await updateJobProgress(
+                jobId,
+                progressPercent,
+                progressPercent < 80 ? "MIGRATING" : progressPercent < 95 ? "VALIDATING" : "PACKAGING",
+                undefined,
+                undefined,
+                `Transforming files (${progressPercent}%)...`
+              );
             },
             controller.signal
           );
@@ -46,7 +67,7 @@ export const migrationWorker = queueConnection
       },
       {
         connection: queueConnection as any,
-        concurrency: 2,
+        concurrency: config.MIGRATION_WORKER_CONCURRENCY || 4,
       }
     )
   : null;

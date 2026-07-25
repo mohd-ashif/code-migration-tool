@@ -61,6 +61,23 @@ export function mapRowToJob(row: any): MigrationJob {
     created_at: row.created_at ? new Date(row.created_at) : null,
     updated_at: row.updated_at ? new Date(row.updated_at) : null,
     deleted_at: row.deleted_at ? new Date(row.deleted_at) : null,
+    currentStage: row.current_stage ?? null,
+    attemptCount: row.attempt_count ?? 1,
+    maxAttempts: row.max_attempts ?? 3,
+    queuedAt: row.queued_at ? new Date(row.queued_at) : null,
+    failedAt: row.failed_at ? new Date(row.failed_at) : null,
+    pausedAt: row.paused_at ? new Date(row.paused_at) : null,
+    cancelledAt: row.cancelled_at ? new Date(row.cancelled_at) : null,
+    errorCode: row.error_code ?? null,
+    errorMessage: row.error_message ?? row.message ?? null,
+    workerId: row.worker_id ?? null,
+    inputFileCount: row.input_file_count ?? 0,
+    processedFileCount: row.processed_file_count ?? 0,
+    outputFileCount: row.output_file_count ?? 0,
+    inputSizeBytes: row.input_size_bytes ? parseInt(row.input_size_bytes, 10) : 0,
+    outputSizeBytes: row.output_size_bytes ? parseInt(row.output_size_bytes, 10) : 0,
+    retryOfJobId: row.retry_of_job_id ?? null,
+    originalJobId: row.original_job_id ?? null,
   };
 }
 
@@ -227,6 +244,23 @@ export class MigrationRepository {
       startedAt: "started_at",
       completedAt: "completed_at",
       downloadCount: "download_count",
+      currentStage: "current_stage",
+      attemptCount: "attempt_count",
+      maxAttempts: "max_attempts",
+      queuedAt: "queued_at",
+      failedAt: "failed_at",
+      pausedAt: "paused_at",
+      cancelledAt: "cancelled_at",
+      errorCode: "error_code",
+      errorMessage: "error_message",
+      workerId: "worker_id",
+      inputFileCount: "input_file_count",
+      processedFileCount: "processed_file_count",
+      outputFileCount: "output_file_count",
+      inputSizeBytes: "input_size_bytes",
+      outputSizeBytes: "output_size_bytes",
+      retryOfJobId: "retry_of_job_id",
+      originalJobId: "original_job_id",
     };
 
     for (const [key, dbCol] of Object.entries(mapping)) {
@@ -305,5 +339,38 @@ export class MigrationRepository {
       totalWarnings: parseInt(r.total_warnings ?? "0", 10),
       totalErrors: parseInt(r.total_errors ?? "0", 10),
     };
+  }
+
+  async createEvent(event: {
+    jobId: string;
+    eventType: string;
+    stage?: string;
+    progress?: number;
+    message?: string;
+    metadata?: any;
+  }): Promise<void> {
+    const query = `
+      INSERT INTO migration_job_events (job_id, event_type, stage, progress, message, metadata)
+      VALUES ($1::uuid, $2, $3, $4, $5, $6)
+    `;
+    await queryDatabase(query, [
+      event.jobId,
+      event.eventType,
+      event.stage || null,
+      event.progress ?? 0,
+      event.message || null,
+      event.metadata ? JSON.stringify(event.metadata) : null,
+    ]);
+  }
+
+  async getEventsByJobId(jobId: string, limit = 50): Promise<any[]> {
+    const query = `
+      SELECT id, job_id as "jobId", event_type as "eventType", stage, progress, message, metadata, created_at as "createdAt"
+      FROM migration_job_events
+      WHERE job_id = $1::uuid
+      ORDER BY created_at ASC
+      LIMIT $2
+    `;
+    return await queryDatabase(query, [jobId, limit]);
   }
 }
