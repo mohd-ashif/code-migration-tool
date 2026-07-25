@@ -15,6 +15,7 @@ router.get("/compiler/health", frameworkController.getCompilerHealth);
 
 // ── Migration Engines & Codemods ──────────────────────────────────────────────
 router.get("/engines", engineController.getEngines);
+router.get("/engines/logs", engineController.getEngineLogs);
 router.patch("/engines/:id", adminMiddleware, engineController.updateEngine);
 router.patch("/codemods/:id", adminMiddleware, engineController.updateCodemod);
 router.patch("/compiler-settings/:id", adminMiddleware, engineController.updateCompilerSettings);

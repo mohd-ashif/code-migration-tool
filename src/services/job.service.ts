@@ -12,11 +12,15 @@ import { createArchive } from "./zip.service";
 import { MigrationRepository } from "../repositories/MigrationRepository";
 import { UploadRepository } from "../repositories/UploadRepository";
 import { MigrationReportService } from "./MigrationReportService";
+import { wsService } from "./ws.service";
 
 export interface JobRecord {
   id: string;
-  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
+  status: "pending" | "processing" | "paused" | "completed" | "failed" | "cancelled";
   progress?: number;
+  stage?: string;
+  activeFile?: string;
+  speed?: string;
   result?: MigrationResult | null;
   message?: string | null;
   request?: MigrationRequest | null;
@@ -27,20 +31,19 @@ const jobStore = new Map<string, JobRecord>();
 export async function persistJobToDb(id: string, request: MigrationRequest, workspaceId?: string, userId?: string) {
   if (!dbPool) return;
   try {
-    // 1. Calculate project name and size
     let projectName = `Project_${request.sourceFramework || "unknown"}_to_${request.targetFramework}`;
     let projectSize = 0;
 
     const files = request.projectFiles || [];
     for (const f of files) {
-      projectSize += Buffer.byteLength(f.content, "utf8");
+      projectSize += Buffer.byteLength(f.content || "", "utf8");
       if (f.path === "package.json") {
         try {
           const pkg = JSON.parse(f.content);
           if (pkg.name) {
             projectName = pkg.name;
           }
-        } catch (e) {
+        } catch {
           // Ignore
         }
       }
@@ -60,7 +63,6 @@ export async function persistJobToDb(id: string, request: MigrationRequest, work
       targetFramework: request.targetFramework,
     });
 
-    // 2. Pack files and save to scratch uploads
     const archiveBuffer = await createArchive(files);
     const uploadsDir = path.join(__dirname, "..", "..", "scratch", "uploads");
     if (!fs.existsSync(uploadsDir)) {
@@ -70,10 +72,8 @@ export async function persistJobToDb(id: string, request: MigrationRequest, work
     const storagePath = path.join(__dirname, "..", "..", relativePath);
     fs.writeFileSync(storagePath, archiveBuffer);
 
-    // Compute checksum
     const checksum = createHash("sha256").update(archiveBuffer).digest("hex");
 
-    // Insert into uploaded_projects
     const uploadRepo = new UploadRepository();
     await uploadRepo.create({
       workspaceId: workspaceId || "00000000-0000-0000-0000-000000000001",
@@ -84,7 +84,6 @@ export async function persistJobToDb(id: string, request: MigrationRequest, work
       size: projectSize,
       checksum,
     });
-
   } catch (err) {
     logger.error(`Failed to persist job ${id}: ${err}`);
   }
@@ -95,22 +94,28 @@ export function enqueueMigrationJob(request: MigrationRequest, workspaceId?: str
   const job: JobRecord = { id, status: "pending", progress: 0, result: null, message: null, request };
   jobStore.set(id, job);
 
-  // persist to DB if configured
   persistJobToDb(id, request, workspaceId, userId);
 
-  // ensure the jobId is attached and emit to queue
   const submission: MigrationRequest = { ...request, jobId: id };
-  
+
+  wsService.broadcast({
+    type: "status",
+    jobId: id,
+    progress: 0,
+    stage: "Queued",
+    message: "Migration task added to queue."
+  });
+
   if (!config.REDIS_URL) {
     logger.info(`No Redis configured. Running migration job ${id} synchronously in the background.`);
     (async () => {
       const { migrateProject } = require("./migration.service");
       try {
-        await updateJobProgress(id, 10);
+        await updateJobProgress(id, 10, "Initializing", undefined, undefined, "Analyzing codebase AST...");
         const result = await migrateProject(
           submission,
           async (progressPercent: number) => {
-            await updateJobProgress(id, progressPercent);
+            await updateJobProgress(id, progressPercent, "Transforming", undefined, undefined, `Processing file transformations (${progressPercent}%)...`);
           }
         );
         await markJobCompleted(id, result);
@@ -126,27 +131,50 @@ export function enqueueMigrationJob(request: MigrationRequest, workspaceId?: str
   return job;
 }
 
-export async function updateJobProgress(jobId: string, progress: number) {
+export async function updateJobProgress(
+  jobId: string,
+  progress: number,
+  stage?: string,
+  activeFile?: string,
+  speed?: string,
+  logMessage?: string
+) {
   const originalJob = jobStore.get(jobId);
-  
-  if (originalJob && (originalJob.status === "completed" || originalJob.status === "failed")) {
+
+  if (originalJob && (originalJob.status === "completed" || originalJob.status === "failed" || originalJob.status === "cancelled")) {
     return;
   }
 
-  jobStore.set(jobId, {
+  const updatedRecord: JobRecord = {
     id: jobId,
-    status: "processing",
+    status: originalJob?.status === "paused" ? "paused" : "processing",
     progress,
+    stage: stage || originalJob?.stage || "Processing",
+    activeFile: activeFile || originalJob?.activeFile,
+    speed: speed || originalJob?.speed,
     result: originalJob?.result ?? null,
     message: originalJob?.message ?? null,
     request: originalJob?.request,
+  };
+
+  jobStore.set(jobId, updatedRecord);
+
+  // Broadcast WebSocket update
+  wsService.broadcast({
+    type: "progress",
+    jobId,
+    progress,
+    stage: updatedRecord.stage,
+    file: activeFile,
+    speed,
+    log: logMessage || `[Processing] Progress: ${progress}% ${activeFile ? `(${activeFile})` : ""}`,
   });
 
   if (!dbPool) return;
   try {
     const migrationRepo = new MigrationRepository();
     await migrationRepo.update(jobId, {
-      status: "processing",
+      status: updatedRecord.status as any,
       progress,
     });
   } catch (err) {
@@ -154,9 +182,107 @@ export async function updateJobProgress(jobId: string, progress: number) {
   }
 }
 
+export async function pauseJob(jobId: string): Promise<boolean> {
+  const job = jobStore.get(jobId);
+  if (!job || job.status !== "processing") return false;
+
+  job.status = "paused";
+  jobStore.set(jobId, job);
+
+  wsService.broadcast({
+    type: "paused",
+    jobId,
+    progress: job.progress,
+    stage: "Paused",
+    message: "Job paused by user request."
+  });
+
+  if (dbPool) {
+    try {
+      const migrationRepo = new MigrationRepository();
+      await migrationRepo.update(jobId, { status: "paused" as any });
+    } catch {
+      // Ignore
+    }
+  }
+
+  return true;
+}
+
+export async function resumeJob(jobId: string): Promise<boolean> {
+  const job = jobStore.get(jobId);
+  if (!job || job.status !== "paused") return false;
+
+  job.status = "processing";
+  jobStore.set(jobId, job);
+
+  wsService.broadcast({
+    type: "resumed",
+    jobId,
+    progress: job.progress,
+    stage: "Processing",
+    message: "Job resumed by user request."
+  });
+
+  if (dbPool) {
+    try {
+      const migrationRepo = new MigrationRepository();
+      await migrationRepo.update(jobId, { status: "processing" });
+    } catch {
+      // Ignore
+    }
+  }
+
+  return true;
+}
+
+export async function cancelJob(jobId: string): Promise<boolean> {
+  const job = jobStore.get(jobId);
+  if (!job) return false;
+
+  job.status = "cancelled";
+  jobStore.set(jobId, job);
+
+  wsService.broadcast({
+    type: "status",
+    jobId,
+    progress: job.progress,
+    stage: "Cancelled",
+    message: "Job cancelled by user request."
+  });
+
+  if (dbPool) {
+    try {
+      const migrationRepo = new MigrationRepository();
+      await migrationRepo.update(jobId, { status: "cancelled" as any });
+    } catch {
+      // Ignore
+    }
+  }
+
+  return true;
+}
+
+export async function retryJob(jobId: string): Promise<JobRecord | null> {
+  const job = jobStore.get(jobId);
+  if (!job || !job.request) return null;
+
+  return enqueueMigrationJob(job.request);
+}
+
 export async function markJobCompleted(jobId: string, result: MigrationResult) {
   const originalJob = jobStore.get(jobId);
-  jobStore.set(jobId, { id: jobId, status: "completed", progress: 100, result, message: null, request: originalJob?.request });
+  jobStore.set(jobId, { id: jobId, status: "completed", progress: 100, stage: "Complete", result, message: null, request: originalJob?.request });
+
+  wsService.broadcast({
+    type: "complete",
+    jobId,
+    progress: 100,
+    stage: "Completed",
+    log: "Migration completed successfully! Summary report generated.",
+    data: result,
+  });
+
   if (!dbPool) return;
   try {
     const migrationRepo = new MigrationRepository();
@@ -179,7 +305,17 @@ export async function markJobCompleted(jobId: string, result: MigrationResult) {
 
 export async function markJobFailed(jobId: string, message?: string) {
   const originalJob = jobStore.get(jobId);
-  jobStore.set(jobId, { id: jobId, status: "failed", result: null, message: message ?? null, request: originalJob?.request });
+  jobStore.set(jobId, { id: jobId, status: "failed", progress: originalJob?.progress || 0, stage: "Failed", result: null, message: message ?? null, request: originalJob?.request });
+
+  wsService.broadcast({
+    type: "failed",
+    jobId,
+    progress: originalJob?.progress || 0,
+    stage: "Failed",
+    log: `Migration failed: ${message || "Unknown error"}`,
+    message: message || "Migration task failed.",
+  });
+
   if (!dbPool) return;
   try {
     const migrationRepo = new MigrationRepository();
@@ -196,140 +332,26 @@ export async function markJobFailed(jobId: string, message?: string) {
 export async function getJobResult(jobId: string, workspaceId?: string): Promise<JobRecord | undefined> {
   let job: JobRecord | undefined;
 
-  // prefer DB if available
   if (dbPool) {
     try {
-      const queryStr = workspaceId
-        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid AND workspace_id = $2::uuid AND deleted_at IS NULL"
-        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE id = $1::uuid AND deleted_at IS NULL";
-      const params = workspaceId ? [jobId, workspaceId] : [jobId];
-      const rows = await queryDatabase(queryStr, params);
-      if (rows && rows.length) {
-        const r = rows[0] as any;
-        job = {
-          id: r.id,
-          status: r.status,
-          request: r.request ?? null,
-          result: r.result ?? null,
-          message: r.message ?? null,
-          progress: r.progress ?? 0,
-          workspace_id: r.workspace_id ?? null,
-          user_id: r.user_id ?? null,
-          created_at: r.created_at ?? null,
-        } as any;
+      const migrationRepo = new MigrationRepository();
+      const dbRecord = await migrationRepo.findByIdInternal(jobId);
+
+      if (dbRecord) {
+        return {
+          id: dbRecord.id,
+          status: dbRecord.status as any,
+          progress: dbRecord.progress,
+          result: dbRecord.result,
+          message: dbRecord.message,
+          request: dbRecord.request,
+        };
       }
     } catch (err) {
-      logger.error(`Failed to read job ${jobId} from DB: ${err}`);
+      logger.error(`Failed to fetch job ${jobId} from DB: ${err}`);
     }
   }
 
-  // Fallback to memory
-  if (!job) {
-    job = jobStore.get(jobId);
-  }
-
-  // Enrich progress dynamically from BullMQ if actively in progress or waiting
-  const activeQueue = migrationQueue;
-  if (config.REDIS_URL && activeQueue && job && (job.status === "pending" || job.status === "processing")) {
-    try {
-      const bullJob = await activeQueue.getJob(jobId);
-      if (bullJob) {
-        const progress = bullJob.progress;
-        if (typeof progress === "number") {
-          job.progress = progress;
-        }
-        const state = await bullJob.getState();
-        if (state === "active") {
-          job.status = "processing";
-        }
-      }
-    } catch (err) {
-      logger.error(`Failed to enrich job ${jobId} status from BullMQ: ${err}`);
-    }
-  }
-
+  job = jobStore.get(jobId);
   return job;
-}
-
-export async function listJobs(workspaceId?: string): Promise<JobRecord[]> {
-  if (dbPool) {
-    try {
-      const queryStr = workspaceId
-        ? "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE workspace_id = $1::uuid AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50"
-        : "SELECT id, status, request, result, message, progress, workspace_id, user_id, created_at FROM migration_jobs WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 50";
-      const params = workspaceId ? [workspaceId] : [];
-      const rows = await queryDatabase(queryStr, params);
-      if (rows) {
-        return rows.map((r: any) => ({
-          id: r.id,
-          status: r.status,
-          request: r.request ?? null,
-          result: r.result ?? null,
-          message: r.message ?? null,
-          progress: r.progress ?? 0,
-          workspace_id: r.workspace_id ?? null,
-          user_id: r.user_id ?? null,
-          created_at: r.created_at ?? null,
-        }));
-      }
-    } catch (err) {
-      logger.error(`Failed to list jobs from DB: ${err}`);
-    }
-  }
-  return Array.from(jobStore.values());
-}
-
-export async function cancelJob(jobId: string, workspaceId?: string): Promise<boolean> {
-  let cancelled = false;
-
-  // 1. Abort active execution if running in our worker
-  const controller = activeJobs.get(jobId);
-  if (controller) {
-    controller.abort();
-    logger.info(`Abort signal sent to active job ${jobId}`);
-    cancelled = true;
-  }
-
-  // 2. Remove job from BullMQ queue (handles waiting / delayed states)
-  const activeQueueForCancel = migrationQueue;
-  if (config.REDIS_URL && activeQueueForCancel) {
-    try {
-      const bullJob = await activeQueueForCancel.getJob(jobId);
-      if (bullJob) {
-        await bullJob.remove();
-        logger.info(`Removed job ${jobId} from BullMQ queue`);
-        cancelled = true;
-      }
-    } catch (err) {
-      logger.error(`Error removing job ${jobId} from BullMQ queue: ${err}`);
-    }
-  }
-
-  // 3. Mark the job state as 'cancelled'
-  const originalJob = jobStore.get(jobId);
-  if (originalJob || cancelled) {
-    jobStore.set(jobId, {
-      id: jobId,
-      status: "cancelled",
-      message: "Job cancelled by user",
-      result: null,
-      request: originalJob?.request,
-      progress: originalJob?.progress ?? 0,
-    });
-
-    if (dbPool) {
-      try {
-        const queryStr = workspaceId
-          ? "UPDATE migration_jobs SET status = 'cancelled'::varchar, message = $1::text, updated_at = NOW() WHERE id = $2::uuid AND workspace_id = $3::uuid"
-          : "UPDATE migration_jobs SET status = 'cancelled'::varchar, message = $1::text, updated_at = NOW() WHERE id = $2::uuid";
-        const params = workspaceId ? ["Job cancelled by user", jobId, workspaceId] : ["Job cancelled by user", jobId];
-        await queryDatabase(queryStr, params);
-      } catch (err) {
-        logger.error(`Failed to update job ${jobId} status to cancelled: ${err}`);
-      }
-    }
-    return true;
-  }
-
-  return false;
 }

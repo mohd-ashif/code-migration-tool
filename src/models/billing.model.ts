@@ -105,6 +105,9 @@ export interface Invoice {
   currency: string;
   status: 'paid' | 'failed' | 'pending' | 'cancelled';
   pdfUrl?: string | null;
+  storageProvider?: string | null;
+  cloudinaryPublicId?: string | null;
+  uploadedAt?: Date | null;
   billingDetails?: any | null;
   createdAt: Date;
   updatedAt: Date;

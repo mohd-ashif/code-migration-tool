@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import path from "path";
 import { logger } from "./utils/logger";
 
 dotenv.config({ override: true });
@@ -30,6 +31,10 @@ export interface AppConfig {
   RAZORPAY_KEY_ID: string;
   RAZORPAY_KEY_SECRET: string;
   RAZORPAY_WEBHOOK_SECRET: string;
+  CLOUDINARY_CLOUD_NAME: string;
+  CLOUDINARY_API_KEY: string;
+  CLOUDINARY_API_SECRET: string;
+  CLOUDINARY_FOLDER: string;
 }
 
 export const config: AppConfig = {
@@ -57,6 +62,10 @@ export const config: AppConfig = {
   RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID?.trim() || "",
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET?.trim() || "",
   RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "",
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME?.trim() || "",
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY?.trim() || "",
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET?.trim() || "",
+  CLOUDINARY_FOLDER: process.env.CLOUDINARY_FOLDER?.trim() || "invoices",
 };
 
 export function validateEnv() {
@@ -66,20 +75,10 @@ export function validateEnv() {
     missing.push("PORT");
   }
 
-  if (!config.API_KEY) {
-    logger.warn("API_KEY is not set. Authentication middleware will allow all requests.");
-  }
-
-  if (!config.DATABASE_URL && !config.SUPABASE_URL) {
-    logger.warn("No database provider configured. Set DATABASE_URL or SUPABASE_URL to enable persistence.");
-  }
-
-  if (!config.SUPABASE_URL || !config.SUPABASE_KEY) {
-    logger.warn("Supabase is not fully configured. SUPABASE_URL and SUPABASE_KEY are required together.");
-  }
-
-  if (!config.OPENAI_API_KEY) {
-    logger.info("OPENAI_API_KEY is not set. AI features will run in stub mode.");
+  if (config.CLOUDINARY_CLOUD_NAME && config.CLOUDINARY_API_KEY && config.CLOUDINARY_API_SECRET) {
+    logger.info(`Cloudinary storage service configured for cloud: ${config.CLOUDINARY_CLOUD_NAME}`);
+  } else {
+    logger.warn("Cloudinary storage is incomplete. PDF invoices will fallback to local storage.");
   }
 
   if (missing.length) {

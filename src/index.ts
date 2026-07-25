@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import http from "http";
 import parseRoutes from "./routes/parse.routes";
 import migrateRoutes from "./routes/migrate.routes";
 import reportRoutes from "./routes/report.routes";
@@ -16,7 +17,11 @@ import reportsRoutes from "./routes/reports.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import frameworkRoutes from "./routes/framework.routes";
 import billingRoutes from "./routes/billing.routes";
+import paymentRoutes from "./routes/payment.routes";
+import invoiceRoutes from "./routes/invoice.routes";
+import subscriptionRoutes from "./routes/subscription.routes";
 import webhookRoutes from "./routes/webhook.routes";
+import uploadRoutes from "./routes/upload.routes";
 import "./services/mail.service";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { rateLimitMiddleware } from "./middleware/ratelimit.middleware";
@@ -26,7 +31,7 @@ import { connectRedis } from "./lib/redis";
 import { initializeDatabase, queryDatabase } from "./lib/database";
 import { config, validateEnv } from "./config";
 import { logger } from "./utils/logger";
-// Start background workers
+import { wsService } from "./services/ws.service";
 import "./queues/workers/migration.worker";
 
 const app = express();
@@ -34,12 +39,12 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ 
-  limit: "10mb",
+  limit: "50mb",
   verify: (req: any, res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(morgan("dev"));
 app.use(rateLimitMiddleware);
 
@@ -69,12 +74,13 @@ app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     message: "Migration tool backend is running.",
-    routes: ["/api/parse", "/api/migrate", "/api/report", "/api/download", "/api/jobs", "/api/graph", "/api/auth", "/api/billing"],
+    routes: ["/api/parse", "/api/migrate", "/api/upload", "/api/report", "/api/download", "/api/jobs", "/api/graph", "/api/auth", "/api/billing", "/api/payments", "/api/invoices", "/api/subscription"],
   });
 });
 
 app.use("/api/parse", parseRoutes);
 app.use("/api/migrate", migrateRoutes);
+app.use("/api/upload", uploadRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/download", downloadRoutes);
 app.use("/api/jobs", jobsRoutes);
@@ -86,6 +92,9 @@ app.use("/api/history", historyRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/invoices", invoiceRoutes);
+app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api", frameworkRoutes);
 
@@ -136,23 +145,17 @@ app.get("/api/docs", (_req, res) => {
   res.send(swaggerHtml);
 });
 
-app.get("/api/sample", (_req, res) => {
-  const path = require("path");
-  const fs = require("fs");
-  const filePath = path.join(__dirname, "..", "sample-project.zip");
-  if (fs.existsSync(filePath)) {
-    res.download(filePath, "sample-project.zip");
-  } else {
-    res.status(404).json({ success: false, message: "Sample project file not found." });
-  }
-});
-
 app.use(errorHandler);
 
 validateEnv();
 
 const port = config.PORT;
-app.listen(port, async () => {
+const server = http.createServer(app);
+
+// Attach Native WebSocket Service for real-time migration updates
+wsService.attach(server);
+
+server.listen(port, async () => {
   logger.info(`Migration backend running on http://localhost:${port}`);
 
   if (config.DATABASE_URL) {
@@ -176,7 +179,3 @@ app.listen(port, async () => {
 });
 
 export default app;
-
-// Trigger watch reload v2: execute compatibility trigger database migrations
-
-

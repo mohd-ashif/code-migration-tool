@@ -11,6 +11,7 @@ import { paymentRepository } from "../repositories/payment.repository";
 import { couponRepository } from "../repositories/coupon.repository";
 import { razorpayService } from "../services/razorpay.service";
 import { invoiceGeneratorService } from "../services/invoice-generator.service";
+import { cloudinaryService } from "../services/cloudinary.service";
 import { getBillingPeriod, resolveWorkspacePlan } from "../middleware/billing.middleware";
 import { HttpError } from "../middleware/error.middleware";
 import { logger } from "../utils/logger";
@@ -395,8 +396,16 @@ export class BillingController {
         updatedAt: new Date()
       });
       
-      const relativePdfUrl = `/api/billing/invoices/${invoiceRecord.id}/pdf`;
-      await invoiceRepository.updatePdfUrl(invoiceRecord.id, relativePdfUrl);
+      const uploadResult = await cloudinaryService.uploadInvoice(pdfPath, invoiceRecord.invoiceNumber);
+      if (uploadResult) {
+        await invoiceRepository.updateCloudinaryStorage(invoiceRecord.id, uploadResult.secureUrl, uploadResult.publicId);
+        if (fs.existsSync(pdfPath)) {
+          fs.unlinkSync(pdfPath); // Delete temporary local file
+        }
+      } else {
+        const relativePdfUrl = `/api/billing/invoices/${invoiceRecord.id}/pdf`;
+        await invoiceRepository.updatePdfUrl(invoiceRecord.id, relativePdfUrl);
+      }
 
       // 7. Reset usage limits for new billing period
       const features = await subscriptionPlanRepository.findPlanFeatures(plan!.id);

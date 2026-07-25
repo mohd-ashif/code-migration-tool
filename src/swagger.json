@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "AI Code Migration Studio - SaaS Billing API",
+    "title": "AI Code Migration Studio - Payment & SaaS Billing API",
     "version": "1.0.0",
-    "description": "API documentation for the AI Code Migration Studio Billing & Subscription system with Razorpay integration and GST invoice support."
+    "description": "API documentation for AI Code Migration Studio production payment system. Powered by Razorpay (INR) with Clean Architecture Gateway Abstraction (supporting future Stripe and PayPal gateways), GST tax calculations, PDF invoice generation, refunds, subscription renewals, retries, and webhook processing."
   },
   "servers": [
     {
@@ -12,65 +12,10 @@
     }
   ],
   "paths": {
-    "/api/billing/plans": {
-      "get": {
-        "summary": "Get all active subscription plans",
-        "description": "Retrieves subscription plans (Free, Pro, Team, Enterprise) along with features.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "plans": { "type": "array" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/billing/subscription": {
-      "get": {
-        "summary": "Get active workspace subscription details",
-        "description": "Retrieves the current plan, limits, renewal date, and billing address for the active workspace.",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "subscription": { "type": "object" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/billing/usage": {
-      "get": {
-        "summary": "Get active workspace usage status",
-        "description": "Retrieve current consumption of migrations, storage, and AI requests versus limits.",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "200": { "description": "Success" }
-        }
-      }
-    },
-    "/api/billing/checkout": {
+    "/api/payments/checkout": {
       "post": {
-        "summary": "Create Razorpay checkout session",
-        "description": "Returns Razorpay subscription initialization keys and payment config.",
+        "summary": "Create Checkout Session",
+        "description": "Initiates payment order/subscription checkout with Razorpay gateway, calculates GST taxes, and records payment events.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -83,21 +28,22 @@
                   "planSlug": { "type": "string", "example": "pro" },
                   "billingCycle": { "type": "string", "enum": ["monthly", "yearly"], "example": "monthly" },
                   "billingAddress": { "type": "object" },
-                  "couponCode": { "type": "string", "example": "WELCOME100" }
+                  "couponCode": { "type": "string", "example": "WELCOME100" },
+                  "gatewayName": { "type": "string", "example": "razorpay" }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "Checkout session initialized" }
+          "200": { "description": "Checkout session created successfully" }
         }
       }
     },
-    "/api/billing/verify": {
+    "/api/payments/verify": {
       "post": {
-        "summary": "Verify payment and activate subscription",
-        "description": "Verifies checkout signatures from Razorpay and marks the workspace subscription active.",
+        "summary": "Verify Payment Signature & Activate Subscription",
+        "description": "Verifies checkout HMAC-SHA256 signature from Razorpay, captures payment, issues sequential GST PDF invoice, resets usage limits, and activates workspace subscription.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -105,118 +51,157 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["paymentId", "signature", "subscriptionId"],
+                "required": ["paymentId", "signature"],
                 "properties": {
-                  "paymentId": { "type": "string" },
-                  "signature": { "type": "string" },
-                  "subscriptionId": { "type": "string" }
+                  "paymentId": { "type": "string", "example": "pay_Npl7520t4wO1pZ" },
+                  "signature": { "type": "string", "example": "a5d89f..." },
+                  "subscriptionId": { "type": "string", "example": "sub_Npl532t5lQpXy9" },
+                  "orderId": { "type": "string", "example": "order_Npl..." }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Payment verified" }
+          "200": { "description": "Payment verified and subscription activated" }
         }
       }
     },
-    "/api/billing/cancel": {
-      "post": {
-        "summary": "Cancel subscription at cycle end",
-        "description": "Schedules cancellation at the end of the current billing cycle.",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "200": { "description": "Cancelled successfully" }
-        }
-      }
-    },
-    "/api/billing/resume": {
-      "post": {
-        "summary": "Resume cancelled pending subscription",
-        "description": "Resumes a subscription scheduled for cancellation before the cycle end.",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "200": { "description": "Resumed successfully" }
-        }
-      }
-    },
-    "/api/billing/invoices": {
+    "/api/payments": {
       "get": {
-        "summary": "Get workspace invoices",
+        "summary": "List Payment History with Search, Filter & Pagination",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["captured", "failed", "refunded", "authorized", "all"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
         "responses": {
-          "200": { "description": "List of invoices" }
+          "200": { "description": "Payment history retrieved successfully" }
         }
       }
     },
-    "/api/billing/payments": {
+    "/api/payments/{id}": {
       "get": {
-        "summary": "Get workspace payment history",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "200": { "description": "List of payments" }
-        }
-      }
-    },
-    "/api/billing/apply-coupon": {
-      "post": {
-        "summary": "Apply and check coupon validity",
-        "security": [{ "BearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["code"],
-                "properties": {
-                  "code": { "type": "string" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "Coupon applied" }
-        }
-      }
-    },
-    "/api/webhooks/razorpay": {
-      "post": {
-        "summary": "Razorpay subscription webhook receiver",
-        "description": "Handles subscription charged, cancelled, and halted events. Validates signatures.",
-        "responses": {
-          "200": { "description": "Event processed" }
-        }
-      }
-    },
-    "/api/billing/admin/plans": {
-      "post": {
-        "summary": "Create subscription plan",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "201": { "description": "Created" }
-        }
-      }
-    },
-    "/api/billing/admin/payments/{id}/refund": {
-      "post": {
-        "summary": "Process payment refund",
+        "summary": "Get Payment Detail by ID",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
+          "200": { "description": "Payment details retrieved" }
+        }
+      }
+    },
+    "/api/payments/{id}/refund": {
+      "post": {
+        "summary": "Refund Payment",
+        "description": "Calls Razorpay refund API, records refund entry, logs audit events, and updates payment/invoice status.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": { "type": "number", "example": 999.00 },
+                  "reason": { "type": "string", "example": "Customer requested refund" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
           "200": { "description": "Refund processed" }
         }
       }
     },
-    "/api/billing/admin/revenue": {
+    "/api/payments/{id}/retry": {
+      "post": {
+        "summary": "Retry Failed Payment",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Retry payment session created" }
+        }
+      }
+    },
+    "/api/invoices": {
       "get": {
-        "summary": "Get system revenue metrics",
+        "summary": "List Workspace Invoices",
         "security": [{ "BearerAuth": [] }],
         "responses": {
-          "200": { "description": "Revenue data" }
+          "200": { "description": "List of GST invoices" }
+        }
+      }
+    },
+    "/api/invoices/{id}": {
+      "get": {
+        "summary": "Get Invoice Details",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Invoice details" }
+        }
+      }
+    },
+    "/api/invoices/{id}/download": {
+      "get": {
+        "summary": "Download PDF Invoice",
+        "description": "Streams generated GST PDF invoice with company logo, GSTIN, workspace details, CGST/SGST/IGST breakdown.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "PDF stream response", "content": { "application/pdf": {} } }
+        }
+      }
+    },
+    "/api/subscription/renew": {
+      "post": {
+        "summary": "Renew Subscription (Manual / Auto)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Subscription renewed" }
+        }
+      }
+    },
+    "/api/subscription/cancel": {
+      "post": {
+        "summary": "Cancel Active Subscription",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Subscription scheduled for cancellation" }
+        }
+      }
+    },
+    "/api/subscription/resume": {
+      "post": {
+        "summary": "Resume Cancelled Subscription",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Subscription resumed" }
+        }
+      }
+    },
+    "/api/webhooks/razorpay": {
+      "post": {
+        "summary": "Razorpay Webhooks Listener",
+        "description": "Processes payment.authorized, payment.captured, payment.failed, refund.processed, subscription.activated, subscription.cancelled, subscription.charged, subscription.paused, subscription.resumed, invoice.paid, invoice.expired with 100% idempotency.",
+        "parameters": [
+          { "name": "x-razorpay-signature", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Webhook event processed" }
         }
       }
     }

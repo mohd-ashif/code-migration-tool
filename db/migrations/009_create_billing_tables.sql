@@ -121,8 +121,13 @@ CREATE TABLE IF NOT EXISTS invoices (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Alter payments table to reference invoices
-ALTER TABLE payments ADD CONSTRAINT fk_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL;
+-- Alter payments table to reference invoices safely
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payment_invoice') THEN
+        ALTER TABLE payments ADD CONSTRAINT fk_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- 9. Create invoice_items table
 CREATE TABLE IF NOT EXISTS invoice_items (

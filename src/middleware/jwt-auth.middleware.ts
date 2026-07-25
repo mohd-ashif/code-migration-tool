@@ -35,6 +35,11 @@ export function jwtAuthMiddleware(req: AuthenticatedRequest, res: Response, next
     token = cookies.access_token;
   }
 
+  // 3. Check Query Parameter (fallback for browser download links)
+  if (!token && req.query && req.query.token) {
+    token = req.query.token as string;
+  }
+
   if (!token) {
     return res.status(401).json({ success: false, message: "Access token is missing." });
   }
