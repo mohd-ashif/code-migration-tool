@@ -93,18 +93,35 @@ export class InvoiceRepository {
     if (invRows.length === 0) return null;
 
     const savedInvoice = invRows[0];
-    const itemRows = await queryDatabase(
-      `SELECT id, invoice_id AS "invoiceId", description, amount, created_at AS "createdAt"
-       FROM invoice_items
-       WHERE invoice_id = $1::uuid
-       ORDER BY created_at ASC`,
-      [savedInvoice.id]
-    );
+    const itemRows = await this.getInvoiceItems(savedInvoice.id);
 
     return {
       ...savedInvoice,
       items: itemRows,
     };
+  }
+
+  async findByInvoiceNumber(invoiceNumber: string): Promise<Invoice | null> {
+    const rows = await queryDatabase(
+      `SELECT id, workspace_id AS "workspaceId", subscription_id AS "subscriptionId", payment_id AS "paymentId",
+              invoice_number AS "invoiceNumber", subtotal, cgst, sgst, igst, discount, total, currency, status,
+              pdf_url AS "pdfUrl", billing_details AS "billingDetails", created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM invoices
+       WHERE invoice_number = $1`,
+      [invoiceNumber]
+    );
+    return rows[0] || null;
+  }
+
+  async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
+    const rows = await queryDatabase(
+      `SELECT id, invoice_id AS "invoiceId", description, amount, created_at AS "createdAt"
+       FROM invoice_items
+       WHERE invoice_id = $1::uuid
+       ORDER BY created_at ASC`,
+      [invoiceId]
+    );
+    return rows;
   }
 
   async listForWorkspace(workspaceId: string): Promise<Invoice[]> {
@@ -126,6 +143,28 @@ export class InvoiceRepository {
        SET pdf_url = $1, updated_at = NOW() 
        WHERE id = $2::uuid`,
       [pdfUrl, id]
+    );
+  }
+
+  async updateCloudinaryStorage(id: string, pdfUrl: string, publicId: string): Promise<void> {
+    await queryDatabase(
+      `UPDATE invoices 
+       SET pdf_url = $1, 
+           storage_provider = 'cloudinary', 
+           cloudinary_public_id = $2, 
+           uploaded_at = NOW(), 
+           updated_at = NOW() 
+       WHERE id = $3::uuid`,
+      [pdfUrl, publicId, id]
+    );
+  }
+
+  async updateStatus(id: string, status: string): Promise<void> {
+    await queryDatabase(
+      `UPDATE invoices 
+       SET status = $1, updated_at = NOW() 
+       WHERE id = $2::uuid`,
+      [status, id]
     );
   }
 }

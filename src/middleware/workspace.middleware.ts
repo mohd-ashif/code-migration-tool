@@ -59,7 +59,7 @@ export async function workspaceMiddleware(req: any, res: Response, next: NextFun
 
   // 2. Resolve Workspace context based on resolved userId
   if (req.userId && req.userId !== SYSTEM_USER_ID) {
-    const headerWorkspaceId = req.headers["x-workspace-id"];
+    const headerWorkspaceId = req.headers["x-workspace-id"] || req.query?.workspaceId;
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     // Check if client requested a specific workspace via header

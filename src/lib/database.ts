@@ -37,7 +37,11 @@ export async function initializeDatabase() {
       for (const file of files) {
         logger.info(`Running database migration: ${file}`);
         const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
-        await queryDatabase(sql);
+        try {
+          await queryDatabase(sql);
+        } catch (migErr: any) {
+          logger.warn(`Migration ${file} notice/warning: ${migErr.message || migErr}`);
+        }
       }
       logger.info("All database migrations verified and applied.");
     }

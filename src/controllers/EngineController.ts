@@ -104,4 +104,21 @@ export class EngineController {
       next(err);
     }
   };
+
+  /**
+   * GET /api/engines/logs
+   * Returns recent compiler engine execution & audit logs.
+   */
+  getEngineLogs = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const engineId = req.query.engineId as string;
+      const logs = await this.engineService.getEngineLogs(engineId);
+      res.json({
+        success: true,
+        data: logs,
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
 }
