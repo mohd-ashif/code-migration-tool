@@ -32,7 +32,7 @@ export async function handleRegister(req: Request, res: Response, next: NextFunc
   try {
     const validationErrors = validateRegisterRequest(req.body);
     if (validationErrors.length > 0) {
-      return res.status(400).json({ success: false, errors: validationErrors });
+      return res.status(400).json({ success: false, message: validationErrors.join(" "), errors: validationErrors });
     }
 
     const { email, password } = req.body;

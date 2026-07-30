@@ -8,6 +8,7 @@ export interface UserDto {
   avatarUrl?: string | null;
   bio?: string | null;
   company?: string | null;
+  systemRole?: string | null;
   createdAt: Date;
 }
 

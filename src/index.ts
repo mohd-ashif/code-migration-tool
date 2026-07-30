@@ -57,6 +57,7 @@ app.use(
     ],
   })
 );
+app.options("*", cors());
 app.use(express.json({ 
   limit: "50mb",
   verify: (req: any, res, buf) => {

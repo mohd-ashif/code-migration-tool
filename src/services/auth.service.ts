@@ -33,6 +33,7 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       company: user.company,
+      systemRole: user.systemRole || user.system_role || 'USER',
       createdAt: user.createdAt,
     };
   }
