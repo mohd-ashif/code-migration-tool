@@ -51,7 +51,7 @@ export function transformStateSetters(code: string, states: Array<{ name: string
             const arg = node.arguments[0];
             if (arg && ts.isObjectLiteralExpression(arg)) {
               const assignments: string[] = [];
-              arg.properties.forEach((prop) => {
+              arg.properties.forEach((prop: any) => {
                 if (prop.name) {
                   const propName = prop.name.getText(sourceFile);
                   let propVal = "";

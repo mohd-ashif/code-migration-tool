@@ -56,7 +56,7 @@ export async function validateProject(
           });
 
           const sourceFile = ts.createSourceFile(f.path, f.content, ts.ScriptTarget.Latest, true);
-          sourceFile.statements.forEach((node) => {
+          sourceFile.statements.forEach((node: any) => {
             if (ts.isImportDeclaration(node)) {
               const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
               if (specifier.startsWith(".")) {

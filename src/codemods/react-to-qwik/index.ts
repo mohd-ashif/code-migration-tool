@@ -65,8 +65,8 @@ export function migrateReactCodeToQwik(sourceCode: string, filePath: string): st
           const params = node.parameters;
           const body = node.body ? (visit(node.body) as ts.Block) : ts.factory.createBlock([]);
 
-          const isDefaultExport = node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword) &&
-                                  node.modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword);
+          const isDefaultExport = node.modifiers?.some((m: any) => m.kind === ts.SyntaxKind.ExportKeyword) &&
+                                  node.modifiers?.some((m: any) => m.kind === ts.SyntaxKind.DefaultKeyword);
 
           const arrowFunc = ts.factory.createArrowFunction(
             undefined,

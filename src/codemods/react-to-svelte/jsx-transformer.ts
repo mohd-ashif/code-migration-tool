@@ -28,7 +28,7 @@ export function transformJSXToSvelteTemplate(
       // Handle React Suspense mapping to Svelte {#await} block
       if (tagName === "Suspense") {
         const fallbackAttr = opening.attributes.properties.find(
-          (p) => ts.isJsxAttribute(p) && p.name.getText(sourceFile) === "fallback"
+          (p: any) => ts.isJsxAttribute(p) && p.name.getText(sourceFile) === "fallback"
         );
         let fallbackHtml = "";
         if (fallbackAttr && ts.isJsxAttribute(fallbackAttr) && fallbackAttr.initializer) {
@@ -195,7 +195,7 @@ export function transformJSXToSvelteTemplate(
     let hasClass = false;
 
     // Check for controlled input pattern value={} onChange={}
-    attributes.properties.forEach((prop) => {
+    attributes.properties.forEach((prop: any) => {
       if (ts.isJsxAttribute(prop) && prop.name) {
         const name = prop.name.getText(sourceFile);
         if (name === "value" && prop.initializer && ts.isJsxExpression(prop.initializer) && prop.initializer.expression) {
@@ -214,7 +214,7 @@ export function transformJSXToSvelteTemplate(
       list.push(`bind:value={${valueExpr}}`);
     }
 
-    attributes.properties.forEach((prop) => {
+    attributes.properties.forEach((prop: any) => {
       if (ts.isJsxAttribute(prop)) {
         const name = prop.name.getText(sourceFile);
 
@@ -307,7 +307,7 @@ export function transformJSXToSvelteTemplate(
     const extract = (n: ts.Node) => {
       if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n)) {
         const attrs = ts.isJsxElement(n) ? n.openingElement.attributes : n.attributes;
-        attrs.properties.forEach((prop) => {
+        attrs.properties.forEach((prop: any) => {
           if (ts.isJsxAttribute(prop) && prop.name.getText(sourceFile) === "key" && prop.initializer) {
             if (ts.isJsxExpression(prop.initializer) && prop.initializer.expression) {
               keyStr = prop.initializer.expression.getText(sourceFile);

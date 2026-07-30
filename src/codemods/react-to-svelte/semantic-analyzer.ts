@@ -109,7 +109,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
   };
 
   // Walk top-level statements
-  sourceFile.statements.forEach((statement) => {
+  sourceFile.statements.forEach((statement: any) => {
     // 1. Imports
     if (ts.isImportDeclaration(statement)) {
       const moduleSpecifier = statement.moduleSpecifier.getText(sourceFile).replace(/['"]/g, "");
@@ -124,7 +124,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
         if (statement.importClause.namedBindings) {
           const nb = statement.importClause.namedBindings;
           if (ts.isNamedImports(nb)) {
-            nb.elements.forEach((element) => {
+            nb.elements.forEach((element: any) => {
               namedImports.push(element.name.text);
             });
           } else if (ts.isNamespaceImport(nb)) {
@@ -138,7 +138,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     // 2. Styled Components
     // e.g. const Container = styled.div` color: red; ` or const Wrapper = styled(Box)` ... `
     if (ts.isVariableStatement(statement)) {
-      statement.declarationList.declarations.forEach((decl) => {
+      statement.declarationList.declarations.forEach((decl: any) => {
         if (ts.isIdentifier(decl.name) && decl.initializer) {
           const name = decl.name.text;
           const initStr = decl.initializer.getText(sourceFile);
@@ -183,7 +183,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
 
     // 4. Functional components (arrow functions or function expressions)
     if (ts.isVariableStatement(statement)) {
-      statement.declarationList.declarations.forEach((decl) => {
+      statement.declarationList.declarations.forEach((decl: any) => {
         if (ts.isIdentifier(decl.name)) {
           const name = decl.name.text;
           if (
@@ -204,8 +204,8 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     if (ts.isClassDeclaration(statement) && statement.name) {
       const name = statement.name.text;
       if (isReactComponentName(name) && statement.heritageClauses) {
-        const isReactClass = statement.heritageClauses.some((clause) => {
-          return clause.types.some((t) => {
+        const isReactClass = statement.heritageClauses.some((clause: any) => {
+          return clause.types.some((t: any) => {
             const text = t.expression.getText(sourceFile);
             return text.includes("Component") || text.includes("PureComponent");
           });
@@ -228,7 +228,7 @@ export function analyzeReactComponent(sourceFile: ts.SourceFile): AnalysisResult
     } else if (ts.isClassDeclaration(statement) && statement.name && isReactComponentName(statement.name.text)) {
       isMainComponent = true;
     } else if (ts.isVariableStatement(statement)) {
-      statement.declarationList.declarations.forEach((decl) => {
+      statement.declarationList.declarations.forEach((decl: any) => {
         if (ts.isIdentifier(decl.name)) {
           const name = decl.name.text;
           if (isReactComponentName(name) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
@@ -271,7 +271,7 @@ function analyzeProps(
 
   // 1. Destructured props: function Comp({ name, age = 18 }: Props)
   if (ts.isObjectBindingPattern(firstParam.name)) {
-    firstParam.name.elements.forEach((element) => {
+    firstParam.name.elements.forEach((element: any) => {
       if (ts.isIdentifier(element.name)) {
         const propName = element.name.text;
         const defaultValue = element.initializer ? element.initializer.getText(sourceFile) : undefined;
@@ -280,7 +280,7 @@ function analyzeProps(
         if (firstParam.type) {
           if (ts.isTypeLiteralNode(firstParam.type)) {
             const member = firstParam.type.members.find(
-              (m) => m.name && m.name.getText(sourceFile) === propName
+              (m: any) => m.name && m.name.getText(sourceFile) === propName
             );
             if (member && ts.isPropertySignature(member) && member.type) {
               type = member.type.getText(sourceFile);
@@ -303,16 +303,16 @@ function analyzeProps(
     // Check if there is destructuring of this parameter inside the function body
     const body = node.body;
     if (body && ts.isBlock(body)) {
-      body.statements.forEach((statement) => {
+      body.statements.forEach((statement: any) => {
         if (ts.isVariableStatement(statement)) {
-          statement.declarationList.declarations.forEach((decl) => {
+          statement.declarationList.declarations.forEach((decl: any) => {
             if (
               ts.isObjectBindingPattern(decl.name) &&
               decl.initializer &&
               ts.isIdentifier(decl.initializer) &&
               decl.initializer.text === propsVarName
             ) {
-              decl.name.elements.forEach((el) => {
+              decl.name.elements.forEach((el: any) => {
                 if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) {
                   result.props.push({
                     name: el.name.text,
@@ -339,10 +339,10 @@ function analyzeComponentBody(
   if (!body) return;
 
   if (ts.isBlock(body)) {
-    body.statements.forEach((statement) => {
+    body.statements.forEach((statement: any) => {
       // 1. Variable Statements: hooks, states, memos, refs
       if (ts.isVariableStatement(statement)) {
-        statement.declarationList.declarations.forEach((decl) => {
+        statement.declarationList.declarations.forEach((decl: any) => {
           if (decl.initializer) {
             const init = decl.initializer;
 
@@ -422,7 +422,7 @@ function analyzeComponentBody(
                   if (init.arguments.length > 1) {
                     const depsArg = init.arguments[1];
                     if (ts.isArrayLiteralExpression(depsArg)) {
-                      dependencies = depsArg.elements.map((el) => el.getText(sourceFile));
+                      dependencies = depsArg.elements.map((el: any) => el.getText(sourceFile));
                     }
                   }
                   result.memos.push({
@@ -442,7 +442,7 @@ function analyzeComponentBody(
                   if (init.arguments.length > 1) {
                     const depsArg = init.arguments[1];
                     if (ts.isArrayLiteralExpression(depsArg)) {
-                      dependencies = depsArg.elements.map((el) => el.getText(sourceFile));
+                      dependencies = depsArg.elements.map((el: any) => el.getText(sourceFile));
                     }
                   }
                   result.callbacks.push({
@@ -475,7 +475,7 @@ function analyzeComponentBody(
                   name: decl.name.text,
                   node: decl,
                   body: `const ${decl.name.text} = ${init.getText(sourceFile)};`,
-                  params: init.parameters.map((p) => ({
+                  params: init.parameters.map((p: any) => ({
                     name: p.name.getText(sourceFile),
                     type: p.type ? p.type.getText(sourceFile) : "any",
                   })),
@@ -493,7 +493,7 @@ function analyzeComponentBody(
           name: statement.name.text,
           node: statement,
           body: statement.getText(sourceFile),
-          params: statement.parameters.map((p) => ({
+          params: statement.parameters.map((p: any) => ({
             name: p.name.getText(sourceFile),
             type: p.type ? p.type.getText(sourceFile) : "any",
           })),
@@ -514,7 +514,7 @@ function analyzeComponentBody(
           if (call.arguments.length >= 2) {
             const depsArg = call.arguments[1];
             if (ts.isArrayLiteralExpression(depsArg)) {
-              dependencies = depsArg.elements.map((el) => el.getText(sourceFile));
+              dependencies = depsArg.elements.map((el: any) => el.getText(sourceFile));
             }
           }
           const callback = call.arguments[0];
@@ -572,14 +572,14 @@ function analyzeClassComponent(
   sourceFile: ts.SourceFile,
   result: AnalysisResult
 ) {
-  node.members.forEach((member) => {
+  node.members.forEach((member: any) => {
     // Property declaration (e.g. state = { count: 0 })
     if (ts.isPropertyDeclaration(member) && member.name && ts.isIdentifier(member.name)) {
       const name = member.name.text;
       if (name === "state" && member.initializer) {
         // Simple state properties
         if (ts.isObjectLiteralExpression(member.initializer)) {
-          member.initializer.properties.forEach((prop) => {
+          member.initializer.properties.forEach((prop: any) => {
             if (prop.name && ts.isIdentifier(prop.name)) {
               result.states.push({
                 name: prop.name.text,
@@ -594,7 +594,7 @@ function analyzeClassComponent(
 
     // Constructor (state initialization in constructor)
     if (ts.isConstructorDeclaration(member) && member.body) {
-      member.body.statements.forEach((statement) => {
+      member.body.statements.forEach((statement: any) => {
         if (
           ts.isExpressionStatement(statement) &&
           ts.isBinaryExpression(statement.expression) &&
@@ -603,7 +603,7 @@ function analyzeClassComponent(
           const lhs = statement.expression.left;
           const rhs = statement.expression.right;
           if (lhs.getText(sourceFile) === "this.state" && ts.isObjectLiteralExpression(rhs)) {
-            rhs.properties.forEach((prop) => {
+            rhs.properties.forEach((prop: any) => {
               if (prop.name && ts.isIdentifier(prop.name)) {
                 const initVal = prop.getText(sourceFile).split(":")[1]?.trim() || "null";
                 result.states.push({
@@ -623,7 +623,7 @@ function analyzeClassComponent(
       const methodName = member.name.text;
       if (methodName === "render" && member.body) {
         // Look for return statement in render
-        member.body.statements.forEach((statement) => {
+        member.body.statements.forEach((statement: any) => {
           if (ts.isReturnStatement(statement) && statement.expression) {
             let jsxExpr: ts.Expression | undefined;
             if (ts.isParenthesizedExpression(statement.expression)) {
@@ -647,7 +647,7 @@ function analyzeClassComponent(
           name: methodName,
           node: member,
           body: member.getText(sourceFile),
-          params: member.parameters.map((p) => ({
+          params: member.parameters.map((p: any) => ({
             name: p.name.getText(sourceFile),
             type: p.type ? p.type.getText(sourceFile) : "any",
           })),
