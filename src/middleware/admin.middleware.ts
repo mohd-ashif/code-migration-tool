@@ -23,7 +23,7 @@ export async function adminMiddleware(req: any, res: Response, next: NextFunctio
       [workspaceId, userId]
     );
 
-    if (!rows || rows.length === 0 || rows[0].role !== "owner") {
+    if (!rows || rows.length === 0 || (rows[0].role !== "owner" && rows[0].role !== "admin")) {
       return res.status(403).json({
         success: false,
         message: "Forbidden: Admin privileges required",
