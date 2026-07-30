@@ -6,9 +6,28 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+import { FeatureFlagService } from "../services/FeatureFlagService";
+
 export async function handleParse(req: Request, res: Response, next: NextFunction) {
   try {
     let projectFiles = req.body.projectFiles ?? [];
+
+    // Feature Flag Check: folder_upload
+    const userId = (req as any).userId;
+    const workspaceId = (req as any).workspaceId;
+    const isFolderUploadEnabled = await FeatureFlagService.isFeatureEnabled({
+      featureKey: "folder_upload",
+      userId,
+      workspaceId,
+    });
+
+    if (!isFolderUploadEnabled && req.body.isFolder) {
+      return res.status(403).json({
+        success: false,
+        code: "FEATURE_DISABLED",
+        message: "Folder upload feature is currently disabled by platform configuration.",
+      });
+    }
 
     if (req.file) {
       const isZip =

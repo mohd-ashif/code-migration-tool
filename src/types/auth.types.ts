@@ -30,6 +30,8 @@ export interface DecodedRefreshTokenPayload {
 }
 
 export interface AuthenticatedRequest extends Request {
+  userId?: string;
+  workspaceId?: string;
   user?: {
     userId: string;
     email: string;

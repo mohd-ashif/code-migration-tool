@@ -29,23 +29,36 @@ export class BillingController {
   
   /**
    * GET /api/billing/plans
+   * Public endpoint returning ACTIVE & public subscription plans ordered by display_order
    */
   async getPlans(req: Request, res: Response, next: NextFunction) {
     try {
-      const plans = await subscriptionPlanRepository.findAllActive();
+      const plans = await queryDatabase(
+        `SELECT 
+           id, name, slug, description, monthly_price as "monthlyPrice",
+           yearly_price as "yearlyPrice", currency, trial_days as "trialDays",
+           display_order as "displayOrder", is_public as "isPublic",
+           is_recommended as "isRecommended", version
+         FROM subscription_plans
+         WHERE status = 'ACTIVE' AND is_public = true
+         ORDER BY display_order ASC, created_at ASC`
+      );
+
       const result = [];
-      
       for (const plan of plans) {
-        const features = await subscriptionPlanRepository.findPlanFeatures(plan.id);
+        const featureRows = await queryDatabase(
+          `SELECT feature_key as "key", feature_value as "value" 
+           FROM subscription_features 
+           WHERE plan_id = $1::uuid`,
+          [plan.id]
+        );
+        
         result.push({
           ...plan,
-          features: features.map(f => ({
-            key: f.featureKey,
-            value: f.featureValue
-          }))
+          features: featureRows
         });
       }
-      
+
       res.json({ success: true, plans: result });
     } catch (err) {
       next(err);
@@ -125,20 +138,36 @@ export class BillingController {
   async checkout(req: Request, res: Response, next: NextFunction) {
     try {
       const workspaceId = getWorkspaceContext(req);
-      const { planSlug, billingCycle, billingAddress, couponCode } = req.body;
+      const { planId, planSlug, billingCycle = "monthly", billingAddress, couponCode } = req.body;
 
-      if (!planSlug || !billingCycle) {
-        throw new HttpError(400, "Plan slug and billing cycle are required.");
+      if (!planId && !planSlug) {
+        throw new HttpError(400, "Plan ID or plan slug is required.");
       }
 
-      // 1. Resolve Target Plan
-      const plan = await subscriptionPlanRepository.findBySlug(planSlug);
-      if (!plan) {
-        throw new HttpError(404, `Plan '${planSlug}' not found.`);
+      // 1. Resolve Target Plan from PostgreSQL Authoritative Store
+      const planRows = await queryDatabase(
+        `SELECT id, name, slug, monthly_price, yearly_price, currency, status, version 
+         FROM subscription_plans 
+         WHERE (id::text = $1 OR slug = $2) AND status = 'ACTIVE' LIMIT 1`,
+        [planId || null, planSlug || null]
+      );
+
+      if (!planRows || planRows.length === 0) {
+        throw new HttpError(404, "Active subscription plan not found.");
       }
 
-      if (plan.slug === "free") {
-        throw new HttpError(400, "Checkout is only applicable for paid subscription tiers.");
+      const plan = {
+        id: planRows[0].id,
+        name: planRows[0].name,
+        slug: planRows[0].slug,
+        monthlyPrice: parseFloat(planRows[0].monthly_price),
+        yearlyPrice: parseFloat(planRows[0].yearly_price),
+        currency: planRows[0].currency || "INR",
+        version: planRows[0].version || 1,
+      };
+
+      if (plan.slug === "free" || (plan.monthlyPrice === 0 && plan.yearlyPrice === 0)) {
+        throw new HttpError(400, "Checkout is only applicable for paid subscription plans.");
       }
 
       // 2. Validate/Save Billing Address

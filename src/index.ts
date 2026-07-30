@@ -79,10 +79,12 @@ app.get("/", (_req, res) => {
 });
 
 import migrationsRoutes from "./routes/migrations.routes";
+import adminRoutes from "./routes/admin.routes";
 
 app.use("/api/parse", parseRoutes);
 app.use("/api/migrate", migrateRoutes);
 app.use("/api/migrations", migrationsRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/download", downloadRoutes);

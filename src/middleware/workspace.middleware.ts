@@ -57,6 +57,25 @@ export async function workspaceMiddleware(req: any, res: Response, next: NextFun
     }
   }
 
+  // 1.5 Enforce User Account Suspension
+  if (req.userId && req.userId !== SYSTEM_USER_ID) {
+    try {
+      const userRows = await queryDatabase(
+        `SELECT status FROM users WHERE id = $1::uuid AND deleted_at IS NULL LIMIT 1`,
+        [req.userId]
+      );
+      if (userRows && userRows.length > 0 && userRows[0].status === "SUSPENDED") {
+        return res.status(403).json({
+          success: false,
+          code: "USER_SUSPENDED",
+          message: "Your account has been suspended. Please contact platform support.",
+        });
+      }
+    } catch {
+      // Ignore check errors
+    }
+  }
+
   // 2. Resolve Workspace context based on resolved userId
   if (req.userId && req.userId !== SYSTEM_USER_ID) {
     const headerWorkspaceId = req.headers["x-workspace-id"] || req.query?.workspaceId;
@@ -65,13 +84,21 @@ export async function workspaceMiddleware(req: any, res: Response, next: NextFun
     // Check if client requested a specific workspace via header
     if (headerWorkspaceId && typeof headerWorkspaceId === "string" && isUUID.test(headerWorkspaceId)) {
       const rows = await queryDatabase(
-        `SELECT workspace_id, role 
-         FROM workspace_members 
-         WHERE workspace_id = $1::uuid AND user_id = $2::uuid AND deleted_at IS NULL 
+        `SELECT wm.workspace_id, wm.role, w.status 
+         FROM workspace_members wm
+         JOIN workspaces w ON w.id = wm.workspace_id
+         WHERE wm.workspace_id = $1::uuid AND wm.user_id = $2::uuid AND wm.deleted_at IS NULL 
          LIMIT 1`,
         [headerWorkspaceId, req.userId]
       );
       if (rows && rows.length > 0) {
+        if (rows[0].status === "SUSPENDED" && !req.path.startsWith("/api/admin")) {
+          return res.status(403).json({
+            success: false,
+            code: "WORKSPACE_SUSPENDED",
+            message: "This workspace has been suspended by platform administration.",
+          });
+        }
         req.workspaceId = headerWorkspaceId;
         req.workspaceRole = rows[0].role;
         return next();
