@@ -123,3 +123,9 @@ dist
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Test workspace temporary directories
+temp-diagnostic-workspace
+**/temp-diagnostic-workspace
+scratch/
+temp/

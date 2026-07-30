@@ -36,8 +36,27 @@ import "./queues/workers/migration.worker";
 
 const app = express();
 
-app.use(helmet());
-app.use(cors());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      // Dynamically allow requesting origin so withCredentials: true works cleanly
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-api-key",
+      "x-workspace-id",
+      "x-trace-id",
+      "x-requested-with",
+    ],
+  })
+);
 app.use(express.json({ 
   limit: "50mb",
   verify: (req: any, res, buf) => {
