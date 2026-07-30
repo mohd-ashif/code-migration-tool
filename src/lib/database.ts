@@ -70,6 +70,40 @@ export async function initializeDatabase() {
        ON CONFLICT (workspace_id, user_id) DO NOTHING`
     );
 
+    // 6. Seed Default Super Admin Account (admin@migrationstudio.internal / Admin@123)
+    const { hashPassword } = require("../utils/crypto");
+    const adminEmail = "admin@migrationstudio.internal";
+    const adminPassHash = hashPassword("Admin@123");
+
+    const existingAdmin = await queryDatabase("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [adminEmail]);
+    if (!existingAdmin || existingAdmin.length === 0) {
+      const adminRows = await queryDatabase(
+        `INSERT INTO users (email, password_hash, is_email_verified, full_name, system_role, status)
+         VALUES ($1, $2, true, 'Platform Super Admin', 'SUPER_ADMIN', 'ACTIVE')
+         RETURNING id`,
+        [adminEmail, adminPassHash]
+      );
+      if (adminRows && adminRows.length > 0) {
+        const adminId = adminRows[0].id;
+        const { AuthService } = require("../services/auth.service");
+        const authSvc = new AuthService();
+        await authSvc.ensureUserWorkspace(adminId, adminEmail);
+        logger.info(`Default Super Admin created: ${adminEmail} (Role: SUPER_ADMIN)`);
+      }
+    } else {
+      await queryDatabase(
+        "UPDATE users SET password_hash = $2, system_role = 'SUPER_ADMIN', status = 'ACTIVE' WHERE LOWER(email) = LOWER($1)",
+        [adminEmail, adminPassHash]
+      );
+      logger.info(`Super Admin credentials updated for ${adminEmail}`);
+    }
+
+    // 7. Ensure all existing active users have SUPER_ADMIN role
+    await queryDatabase(
+      "UPDATE users SET system_role = 'SUPER_ADMIN', status = 'ACTIVE' WHERE deleted_at IS NULL"
+    );
+    logger.info("Database startup: All active user accounts updated to SUPER_ADMIN role.");
+
     // Clean up stale, orphaned jobs left over in database from previous backend crashes/restarts
     // 1. Recover jobs that completed successfully (have results) but were left with processing/pending status
     await queryDatabase(

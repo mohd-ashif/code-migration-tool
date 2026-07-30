@@ -3,14 +3,28 @@ import http from "http";
 import { logger } from "../utils/logger";
 
 export interface MigrationWsMessage {
-  type: "progress" | "stage" | "log" | "status" | "complete" | "failed" | "paused" | "resumed";
+  event?:
+    | "job.queued"
+    | "job.started"
+    | "job.progress"
+    | "job.stage_changed"
+    | "job.paused"
+    | "job.resumed"
+    | "job.retrying"
+    | "job.completed"
+    | "job.failed"
+    | "job.cancelled";
+  type?: string;
   jobId: string;
-  progress?: number;
+  status?: string;
   stage?: string;
+  progress?: number;
+  processedFiles?: number;
+  totalFiles?: number;
+  message?: string;
   file?: string;
   speed?: string;
   log?: string;
-  message?: string;
   data?: any;
 }
 
@@ -19,6 +33,7 @@ interface ClientConnection {
   socket: any;
   jobId?: string;
   workspaceId?: string;
+  userId?: string;
 }
 
 export class WebSocketService {
@@ -47,6 +62,7 @@ export class WebSocketService {
       const searchParams = new URLSearchParams(queryStr);
       const jobId = searchParams.get("jobId") || undefined;
       const workspaceId = searchParams.get("workspaceId") || undefined;
+      const userId = searchParams.get("userId") || undefined;
 
       // RFC6455 Handshake
       const acceptKey = crypto
@@ -65,10 +81,10 @@ export class WebSocketService {
       socket.write(responseHeaders);
 
       const clientId = `client_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const client: ClientConnection = { id: clientId, socket, jobId, workspaceId };
+      const client: ClientConnection = { id: clientId, socket, jobId, workspaceId, userId };
       this.clients.set(clientId, client);
 
-      logger.info(`WebSocket client connected (${clientId}) for jobId: ${jobId || "all"}`);
+      logger.info(`WebSocket client connected (${clientId}) [jobId: ${jobId || "all"}, workspaceId: ${workspaceId || "all"}]`);
 
       // Handle socket incoming data (Ping/Pong/Close)
       socket.on("data", (buffer: Buffer) => {
@@ -90,15 +106,33 @@ export class WebSocketService {
   }
 
   /**
-   * Broadcast message to all subscribed WebSocket clients or clients watching a specific jobId
+   * Broadcast message to authorized WebSocket clients matching jobId or workspaceId
    */
   public broadcast(payload: MigrationWsMessage) {
-    const jsonMessage = JSON.stringify(payload);
+    const formattedPayload = {
+      event: payload.event || (payload.type ? `job.${payload.type}` : "job.progress"),
+      jobId: payload.jobId,
+      status: payload.status || "MIGRATING",
+      stage: payload.stage || "processing",
+      progress: payload.progress ?? 0,
+      processedFiles: payload.processedFiles ?? 0,
+      totalFiles: payload.totalFiles ?? 0,
+      message: payload.message || payload.log || "",
+      file: payload.file,
+      speed: payload.speed,
+      data: payload.data,
+    };
+
+    const jsonMessage = JSON.stringify(formattedPayload);
     const frame = this.createFrame(jsonMessage);
 
     for (const [clientId, client] of this.clients.entries()) {
       try {
-        if (!client.jobId || client.jobId === payload.jobId) {
+        // Enforce workspace & job tenancy isolation
+        const matchesJob = !client.jobId || client.jobId === payload.jobId;
+        const matchesWorkspace = !client.workspaceId || !payload.data?.workspaceId || client.workspaceId === payload.data?.workspaceId;
+
+        if (matchesJob && matchesWorkspace) {
           client.socket.write(frame);
         }
       } catch (err) {

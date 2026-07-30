@@ -1,6 +1,23 @@
 import { JobRecord } from "../services/job.service";
 
+export interface MigrationJobEvent {
+  id: string;
+  jobId: string;
+  eventType: string;
+  stage?: string;
+  progress?: number;
+  message?: string;
+  metadata?: any;
+  createdAt: Date;
+}
+
 export interface MigrationJob extends JobRecord {
+  id: string;
+  status: any;
+  progress?: number;
+  result?: any;
+  message?: string | null;
+  request?: any;
   workspace_id?: string | null;
   user_id?: string | null;
   projectName?: string;
@@ -18,6 +35,23 @@ export interface MigrationJob extends JobRecord {
   created_at?: Date | null;
   updated_at?: Date | null;
   deleted_at?: Date | null;
+  currentStage?: string | null;
+  attemptCount?: number;
+  maxAttempts?: number;
+  queuedAt?: Date | null;
+  failedAt?: Date | null;
+  pausedAt?: Date | null;
+  cancelledAt?: Date | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  workerId?: string | null;
+  inputFileCount?: number;
+  processedFileCount?: number;
+  outputFileCount?: number;
+  inputSizeBytes?: number;
+  outputSizeBytes?: number;
+  retryOfJobId?: string | null;
+  originalJobId?: string | null;
 }
 
 export interface MigrationReport {

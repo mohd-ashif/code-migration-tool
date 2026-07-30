@@ -35,6 +35,11 @@ export interface AppConfig {
   CLOUDINARY_API_KEY: string;
   CLOUDINARY_API_SECRET: string;
   CLOUDINARY_FOLDER: string;
+  MAX_UPLOAD_SIZE_MB: number;
+  MAX_EXTRACTED_SIZE_MB: number;
+  MAX_PROJECT_FILES: number;
+  MIGRATION_WORKER_CONCURRENCY: number;
+  AI_WORKER_CONCURRENCY: number;
 }
 
 export const config: AppConfig = {
@@ -66,6 +71,11 @@ export const config: AppConfig = {
   CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY?.trim() || "",
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET?.trim() || "",
   CLOUDINARY_FOLDER: process.env.CLOUDINARY_FOLDER?.trim() || "invoices",
+  MAX_UPLOAD_SIZE_MB: Number(process.env.MAX_UPLOAD_SIZE_MB ?? 100),
+  MAX_EXTRACTED_SIZE_MB: Number(process.env.MAX_EXTRACTED_SIZE_MB ?? 500),
+  MAX_PROJECT_FILES: Number(process.env.MAX_PROJECT_FILES ?? 5000),
+  MIGRATION_WORKER_CONCURRENCY: Number(process.env.MIGRATION_WORKER_CONCURRENCY ?? 4),
+  AI_WORKER_CONCURRENCY: Number(process.env.AI_WORKER_CONCURRENCY ?? 2),
 };
 
 export function validateEnv() {

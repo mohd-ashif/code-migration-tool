@@ -35,6 +35,21 @@ export async function authMiddleware(req: any, res: Response, next: NextFunction
       ) {
         const user = await userRepo.findById(apiKeyRecord.userId);
         if (user) {
+          // Feature Flag Check: api_access
+          const { FeatureFlagService } = require("../services/FeatureFlagService");
+          const isApiAccessEnabled = await FeatureFlagService.isFeatureEnabled({
+            featureKey: "api_access",
+            userId: user.id,
+          });
+
+          if (!isApiAccessEnabled) {
+            return res.status(403).json({
+              success: false,
+              code: "FEATURE_DISABLED",
+              message: "API Key authentication feature is disabled by platform administration.",
+            });
+          }
+
           // Establish request user context
           req.userId = user.id;
           req.user = { userId: user.id, email: user.email };
