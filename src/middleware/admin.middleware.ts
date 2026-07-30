@@ -3,9 +3,8 @@ import { queryDatabase } from "../lib/database";
 
 export async function adminMiddleware(req: any, res: Response, next: NextFunction) {
   const userId = req.userId;
-  const workspaceId = req.workspaceId;
 
-  if (!userId || !workspaceId) {
+  if (!userId) {
     return res.status(401).json({
       success: false,
       message: "Unauthorized: Missing authentication context",
@@ -13,20 +12,21 @@ export async function adminMiddleware(req: any, res: Response, next: NextFunctio
   }
 
   // System context / CLI bypass if using system user UUID
-  if (userId === "00000000-0000-0000-0000-000000000000" && workspaceId === "00000000-0000-0000-0000-000000000001") {
+  if (userId === "00000000-0000-0000-0000-000000000000") {
     return next();
   }
 
   try {
     const rows = await queryDatabase(
-      `SELECT role FROM workspace_members WHERE workspace_id = $1::uuid AND user_id = $2::uuid LIMIT 1`,
-      [workspaceId, userId]
+      `SELECT system_role FROM users WHERE id = $1::uuid AND deleted_at IS NULL LIMIT 1`,
+      [userId]
     );
 
-    if (!rows || rows.length === 0 || (rows[0].role !== "owner" && rows[0].role !== "admin")) {
+    const systemRole = rows?.[0]?.system_role?.toUpperCase();
+    if (!rows || rows.length === 0 || (systemRole !== "SUPER_ADMIN" && systemRole !== "ADMIN")) {
       return res.status(403).json({
         success: false,
-        message: "Forbidden: Admin privileges required",
+        message: "Forbidden: Platform Admin privileges required",
       });
     }
 
