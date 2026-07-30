@@ -2,9 +2,7 @@ name: Backend CI/CD Pipeline (Render)
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
   build-and-test:
@@ -22,7 +20,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: TypeScript Build Check
         run: npm run build
@@ -33,7 +31,7 @@ jobs:
   deploy-render:
     name: Deploy Backend to Render
     needs: build-and-test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
