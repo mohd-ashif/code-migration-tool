@@ -21,7 +21,7 @@ export class DownloadService {
       downloadCount: currentDownloads + 1,
     });
 
-    const files = (job.result.migratedFiles || []).filter((f) => f.path !== ".migration_metadata.json");
+    const files = (job.result.migratedFiles || []).filter((f: any) => f.path !== ".migration_metadata.json");
     const archiveBuffer = await createArchive(files);
     
     return {

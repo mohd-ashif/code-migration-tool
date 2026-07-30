@@ -55,7 +55,7 @@ export class MigrationReportService {
     const migratedFiles = job.result.migratedFiles || [];
 
     // Parse metadata
-    const metadataFile = migratedFiles.find((f) => f.path === ".migration_metadata.json");
+    const metadataFile = migratedFiles.find((f: any) => f.path === ".migration_metadata.json");
     let depAnalysis: any[] = [];
     let manualReviews: string[] = [];
     let fixedIssues: string[] = [];
@@ -91,7 +91,7 @@ export class MigrationReportService {
     const dependencyGraph = await this.buildDependencyGraphForJob(jobId, migratedFiles);
 
     const metrics = {
-      migratedFiles: migratedFiles.filter((f) => f.path !== ".migration_metadata.json").length,
+      migratedFiles: migratedFiles.filter((f: any) => f.path !== ".migration_metadata.json").length,
       warningsCount: warnings.length,
       errorsCount: errors.length,
       warnings,
