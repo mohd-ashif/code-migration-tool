@@ -98,11 +98,11 @@ export async function initializeDatabase() {
       logger.info(`Super Admin credentials updated for ${adminEmail}`);
     }
 
-    // 7. Ensure all existing active users have SUPER_ADMIN role
+    // 7. Ensure regular user accounts default to USER system role
     await queryDatabase(
-      "UPDATE users SET system_role = 'SUPER_ADMIN', status = 'ACTIVE' WHERE deleted_at IS NULL"
+      "UPDATE users SET system_role = 'USER' WHERE LOWER(email) != 'admin@migrationstudio.internal' AND (system_role IS NULL OR system_role = 'SUPER_ADMIN')"
     );
-    logger.info("Database startup: All active user accounts updated to SUPER_ADMIN role.");
+    logger.info("Database startup: Verified system roles for active user accounts.");
 
     // Clean up stale, orphaned jobs left over in database from previous backend crashes/restarts
     // 1. Recover jobs that completed successfully (have results) but were left with processing/pending status

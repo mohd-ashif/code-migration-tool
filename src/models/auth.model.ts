@@ -7,6 +7,7 @@ export interface User {
   avatarUrl?: string | null;
   bio?: string | null;
   company?: string | null;
+  systemRole?: string | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;

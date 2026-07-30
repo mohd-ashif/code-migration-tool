@@ -12,6 +12,7 @@ export function mapRowToUser(row: any): User {
     avatarUrl: row.avatar_url,
     bio: row.bio,
     company: row.company,
+    systemRole: row.system_role || "USER",
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
