@@ -40,7 +40,7 @@ export function migrateReactCodeToSolid(sourceCode: string, filePath: string): s
           const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
           if (specifier === "react") {
             const clauses: string[] = [];
-            node.importClause?.namedBindings?.forEachChild(named => {
+            node.importClause?.namedBindings?.forEachChild((named: any) => {
               const name = named.getText(sourceFile);
               if (name === "useState") clauses.push("createSignal");
               else if (name === "useEffect") clauses.push("createEffect");

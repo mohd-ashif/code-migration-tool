@@ -52,7 +52,7 @@ export function transformReactRouterImportsAndHooks(sourceCode: string, filePath
         hasReactRouterImport = true;
         const namedBindings = node.importClause?.namedBindings;
         if (namedBindings && ts.isNamedImports(namedBindings)) {
-          namedBindings.elements.forEach(el => {
+          namedBindings.elements.forEach((el: any) => {
             const name = el.name.text;
             if (name === "Link") hasLink = true;
             if (name === "useNavigate") hasNavigate = true;
