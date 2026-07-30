@@ -9,6 +9,7 @@ dotenv.config({ path: envFile, override: true });
 export interface AppConfig {
   NODE_ENV: string;
   PORT: number;
+  FRONTEND_URL: string;
   API_KEY: string;
   DATABASE_URL: string;
   REDIS_URL: string;
@@ -45,6 +46,7 @@ export interface AppConfig {
 export const config: AppConfig = {
   NODE_ENV: process.env.NODE_ENV?.trim() || "development",
   PORT: Number(process.env.PORT ?? 4000),
+  FRONTEND_URL: (process.env.FRONTEND_URL?.trim() || "https://code-migration-tool-frontend-neon.vercel.app").replace(/\/+$/, ""),
   API_KEY: process.env.API_KEY?.trim() || "",
   DATABASE_URL: process.env.DATABASE_URL?.trim() || "",
   REDIS_URL: process.env.REDIS_URL?.trim() || "",
@@ -60,10 +62,10 @@ export const config: AppConfig = {
   SMTP_FROM: process.env.SMTP_FROM?.trim(),
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID?.trim() || "default-google-client-id",
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET?.trim() || "default-google-client-secret",
-  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI?.trim() || "http://localhost:4000/api/auth/google/callback",
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI?.trim() || "https://code-migration-tool.onrender.com/api/auth/google/callback",
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID?.trim() || "default-github-client-id",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET?.trim() || "default-github-client-secret",
-  GITHUB_REDIRECT_URI: process.env.GITHUB_REDIRECT_URI?.trim() || "http://localhost:4000/api/auth/github/callback",
+  GITHUB_REDIRECT_URI: process.env.GITHUB_REDIRECT_URI?.trim() || "https://code-migration-tool.onrender.com/api/auth/github/callback",
   RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID?.trim() || "",
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET?.trim() || "",
   RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "",

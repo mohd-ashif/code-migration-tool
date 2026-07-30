@@ -337,8 +337,8 @@ export async function handleGoogleCallback(req: Request, res: Response, next: Ne
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // 5. Redirect back to frontend home page
-    res.redirect("http://localhost:3000/");
+    // 5. Redirect back to frontend dashboard
+    res.redirect(`${config.FRONTEND_URL}/dashboard`);
   } catch (error) {
     handleError(error, res, next);
   }
@@ -454,8 +454,8 @@ export async function handleGithubCallback(req: Request, res: Response, next: Ne
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // 6. Redirect back to frontend homepage
-    res.redirect("http://localhost:3000/");
+    // 6. Redirect back to frontend dashboard
+    res.redirect(`${config.FRONTEND_URL}/dashboard`);
   } catch (error) {
     handleError(error, res, next);
   }
