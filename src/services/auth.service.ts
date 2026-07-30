@@ -431,7 +431,7 @@ export class AuthService {
       loginStatus: "magic_link_requested",
     });
 
-    const magicLink = `http://localhost:3000/?mode=magic-link&token=${token}`;
+    const magicLink = `${config.FRONTEND_URL}/?mode=magic-link&token=${token}`;
     const subject = "Your Magic Login Link";
     const html = `
       <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border: 1px solid #eee; border-radius: 10px; background-color: #0B0B12; color: #ffffff;">

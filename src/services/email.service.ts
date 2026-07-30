@@ -4,8 +4,8 @@ import { config } from "../config";
 
 export class EmailService {
   async sendVerificationEmail(email: string, token: string): Promise<void> {
-    // Generate verification link pointing to the React frontend application (port 3000)
-    const verificationLink = `http://localhost:3000/?mode=verify-email&token=${token}`;
+    // Generate verification link pointing to the frontend application
+    const verificationLink = `${config.FRONTEND_URL}/?mode=verify-email&token=${token}`;
     const subject = "Verify Your Account";
     const html = `
       <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border: 1px solid #eee; border-radius: 10px; background-color: #0B0B12; color: #ffffff;">
@@ -32,8 +32,8 @@ export class EmailService {
   }
 
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
-    // Generate password reset link pointing to the React frontend application (port 3000)
-    const resetLink = `http://localhost:3000/?mode=reset-password&token=${token}`;
+    // Generate password reset link pointing to the frontend application
+    const resetLink = `${config.FRONTEND_URL}/?mode=reset-password&token=${token}`;
     const subject = "Reset Your Password";
     const html = `
       <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border: 1px solid #eee; border-radius: 10px; background-color: #0B0B12; color: #ffffff;">
@@ -60,7 +60,7 @@ export class EmailService {
   }
 
   async sendWorkspaceInvitationEmail(email: string, token: string, workspaceName: string, invitedBy: string): Promise<void> {
-    const inviteLink = `http://localhost:3000/?mode=accept-invite&token=${token}`;
+    const inviteLink = `${config.FRONTEND_URL}/?mode=accept-invite&token=${token}`;
     const subject = `Join ${workspaceName} Workspace`;
     const html = `
       <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border: 1px solid #eee; border-radius: 10px; background-color: #0B0B12; color: #ffffff;">
