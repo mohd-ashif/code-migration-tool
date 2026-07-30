@@ -4,7 +4,7 @@ import { ParsedFile } from "../types/parser.types";
 export async function createZip(files: ParsedFile[]): Promise<Buffer> {
   const archive = archiver("zip", { zlib: { level: 9 } });
   const chunks: Buffer[] = [];
-  archive.on("data", (chunk) => chunks.push(chunk));
+  archive.on("data", (chunk: Buffer) => chunks.push(chunk));
   files.forEach((file) => {
     archive.append(file.content, { name: file.path });
   });
