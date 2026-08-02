@@ -82,7 +82,7 @@ export class EntitlementService {
         team_members_limit: "1",
         ai_requests_limit: "10",
         api_access: "false",
-        dependency_graph: "false",
+        dependency_graph: "true",
         custom_reports: "false",
       },
     };
