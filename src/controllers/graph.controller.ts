@@ -75,6 +75,33 @@ export async function handleGetGraph(req: Request, res: Response, next: NextFunc
         };
       });
 
+      // Fallback: If no AST symbol nodes were extracted, generate file-level nodes
+      if (allNodes.length === 0 && files.length > 0) {
+        files.forEach((f) => {
+          if (f.path === ".migration_metadata.json") return;
+          const fileName = path.basename(f.path);
+          const ext = path.extname(f.path).replace(".", "").toLowerCase();
+          let type: GraphNode["type"] = "function";
+          if (["tsx", "jsx", "vue", "svelte", "html"].includes(ext)) {
+            type = "component";
+          } else if (fileName.startsWith("use") && ["ts", "js"].includes(ext)) {
+            type = "hook";
+          }
+
+          allNodes.push({
+            id: f.path,
+            label: fileName,
+            type,
+            file: f.path,
+            isCircular: false,
+            isUnused: false,
+            importCount: 0,
+            usedByCount: 0,
+            imports: [],
+          });
+        });
+      }
+
       // Filter nodes based on search and type filter
       let filteredNodes = allNodes;
       if (search) {
@@ -101,6 +128,20 @@ export async function handleGetGraph(req: Request, res: Response, next: NextFunc
             source: node.id,
             target: dep.id,
             type: node.symbolType === "import" ? "import" : "dependency",
+          });
+        }
+      }
+
+      // Fallback edges for file-level nodes if semantic edges are empty
+      if (allEdges.length === 0 && allNodes.length > 1) {
+        for (let i = 0; i < allNodes.length - 1; i++) {
+          const src = allNodes[i];
+          const tgt = allNodes[i + 1];
+          allEdges.push({
+            id: `${src.id}->${tgt.id}`,
+            source: src.id,
+            target: tgt.id,
+            type: "dependency",
           });
         }
       }
