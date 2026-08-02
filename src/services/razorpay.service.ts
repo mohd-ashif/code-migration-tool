@@ -180,7 +180,12 @@ export class RazorpayService {
     subscriptionId: string;
   }): boolean {
     try {
-      if (params.subscriptionId?.startsWith("sub_mock_") && params.signature === "mock_signature_success") {
+      // Allow sandbox mock bypass only in non-production environments
+      if (
+        config.NODE_ENV !== "production" &&
+        params.subscriptionId?.startsWith("sub_mock_") &&
+        params.signature === "mock_signature_success"
+      ) {
         return true;
       }
       const data = `${params.paymentId}|${params.subscriptionId}`;

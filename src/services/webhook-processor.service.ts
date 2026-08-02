@@ -290,6 +290,39 @@ export class WebhookProcessorService {
           break;
         }
 
+        case "subscription.halted": {
+          // Razorpay halts a subscription after repeated payment failures.
+          // Downgrade workspace to free until the customer updates their payment method.
+          if (subEntity) {
+            const sub = await subscriptionRepository.findByProviderId(subEntity.id);
+            if (sub) {
+              await subscriptionRepository.update(sub.id, { status: "suspended" as any });
+
+              const freePlan = await subscriptionPlanRepository.findBySlug("free");
+              if (freePlan) {
+                const freeFeatures = await subscriptionPlanRepository.findPlanFeatures(freePlan.id);
+                const freeStorage = freeFeatures.find(f => f.featureKey === "storage_limit_bytes")?.featureValue || "104857600";
+
+                await queryDatabase(
+                  `UPDATE workspaces 
+                   SET plan_id = 'free', storage_limit = $1, status = 'active'
+                   WHERE id = $2::uuid`,
+                  [parseInt(freeStorage, 10), sub.workspaceId]
+                );
+              }
+
+              logger.warn(`Subscription halted for workspace ${sub.workspaceId}. Workspace downgraded to free until payment is resolved.`);
+
+              await paymentEventRepository.create({
+                workspaceId: sub.workspaceId,
+                eventType: "Subscription Halted",
+                payload: event
+              });
+            }
+          }
+          break;
+        }
+
         case "subscription.resumed": {
           if (subEntity) {
             const sub = await subscriptionRepository.findByProviderId(subEntity.id);
