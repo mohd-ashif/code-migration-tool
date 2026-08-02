@@ -264,7 +264,13 @@ export class BillingController {
         });
         rzpSubId = rzpSub.id;
       } catch (rzpErr: any) {
-        logger.warn(`Razorpay service failed/unauthorized. Falling back to Simulated Sandbox Mode. Error: ${rzpErr.message}`);
+        if (config.NODE_ENV === "production") {
+          // In production, never fall back to a mock — surface the real error to the user.
+          logger.error(`Razorpay checkout failed in production: ${rzpErr.message}`);
+          throw new HttpError(503, "Payment gateway temporarily unavailable. Please try again in a few minutes.");
+        }
+        // Development / staging: allow sandbox fallback so developers can test the UI without real keys.
+        logger.warn(`Razorpay service failed (non-production). Falling back to Sandbox Mode. Error: ${rzpErr.message}`);
         isMock = true;
         rzpSubId = `sub_mock_${Math.random().toString(36).substring(2, 12)}`;
       }

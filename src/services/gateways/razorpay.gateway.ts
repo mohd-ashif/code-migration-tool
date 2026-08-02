@@ -16,11 +16,11 @@ export class RazorpayGateway implements IPaymentGateway {
   readonly name = "razorpay";
 
   private get keyId(): string {
-    return config.RAZORPAY_KEY_ID || "rzp_test_mockkey";
+    return config.RAZORPAY_KEY_ID || "";
   }
 
   private get keySecret(): string {
-    return config.RAZORPAY_KEY_SECRET || "v4jFQyWexS7JYHS470MGf6nN";
+    return config.RAZORPAY_KEY_SECRET || "";
   }
 
   private makeRequest<T = any>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: any): Promise<T> {
